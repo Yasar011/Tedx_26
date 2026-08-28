@@ -54,7 +54,13 @@ export default function ApplyPage() {
     (async () => {
       try {
         const [deptSnap, settingsSnap] = await Promise.all([
-          getDocs(query(collection(db, "departments"), where("active", "==", true))),
+          getDocs(
+            query(
+              collection(db, "departments"),
+              where("active", "==", true),
+              where("applicationsOpen", "==", true)
+            )
+          ),
           getDoc(doc(db, "settings", "event")),
         ]);
         setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
@@ -265,6 +271,8 @@ export default function ApplyPage() {
                 </FormField>
               </div>
 
+              <DepartmentInfoPanel departments={departments} />
+
               <FormField label="Relevant Skills" required>
                 <Textarea
                   required
@@ -309,6 +317,33 @@ export default function ApplyPage() {
             </form>
           </CardContent>
         </Card>
+      </div>
+    </div>
+  );
+}
+
+function DepartmentInfoPanel({ departments }: { departments: Department[] }) {
+  const withInfo = departments.filter((d) => d.description || d.purpose || d.responsibilities);
+  if (withInfo.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+        What each department does
+      </p>
+      <div className="space-y-3">
+        {withInfo.map((d) => (
+          <div key={d.id} className="text-sm">
+            <p className="font-medium text-neutral-900">{d.name}</p>
+            {d.description && <p className="text-neutral-600">{d.description}</p>}
+            {d.responsibilities && (
+              <p className="text-neutral-500">
+                <span className="font-medium">Responsibilities: </span>
+                {d.responsibilities}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );
