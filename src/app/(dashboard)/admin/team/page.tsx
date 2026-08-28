@@ -1,0 +1,136 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { collection, doc, getDocs, updateDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Department, Role, UserProfile } from "@/lib/types";
+import { Card, CardContent } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Input";
+import { FullPageSpinner } from "@/components/ui/Spinner";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ROLE_LABELS } from "@/lib/constants";
+import { initials } from "@/lib/utils";
+import { Users } from "lucide-react";
+import { toast } from "sonner";
+import { logActivity } from "@/lib/activity";
+
+const ASSIGNABLE_ROLES: Role[] = ["admin", "core", "department_head", "volunteer", "applicant", "unassigned"];
+
+export default function AdminTeamPage() {
+  const { profile } = useAuth();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  async function load() {
+    const [userSnap, deptSnap] = await Promise.all([
+      getDocs(collection(db, "users")),
+      getDocs(collection(db, "departments")),
+    ]);
+    setUsers(userSnap.docs.map((d) => d.data() as UserProfile).sort((a, b) => a.name?.localeCompare(b.name)));
+    setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function setRole(user: UserProfile, role: Role) {
+    await updateDoc(doc(db, "users", user.uid), { role });
+    await logActivity({
+      actorId: profile!.uid,
+      actorName: profile!.name,
+      action: "ROLE_CHANGED",
+      targetType: "user",
+      targetId: user.uid,
+      message: `${profile!.name} set ${user.name}'s role to ${ROLE_LABELS[role]}`,
+    });
+    toast.success(`${user.name} is now ${ROLE_LABELS[role]}`);
+    load();
+  }
+
+  async function setDepartment(user: UserProfile, departmentId: string) {
+    await updateDoc(doc(db, "users", user.uid), { departmentId: departmentId || null });
+    if (departmentId && user.role === "department_head") {
+      await updateDoc(doc(db, "departments", departmentId), { headUserId: user.uid });
+    }
+    toast.success(`${user.name}'s department updated`);
+    load();
+  }
+
+  if (loading) return <FullPageSpinner />;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-semibold text-neutral-900">Team Management</h1>
+        <p className="text-sm text-neutral-500">{users.length} accounts</p>
+      </div>
+
+      {users.length === 0 ? (
+        <EmptyState icon={Users} title="No accounts yet" />
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="px-4 py-3">User</th>
+                    <th className="px-4 py-3">Role</th>
+                    <th className="px-4 py-3">Department</th>
+                    <th className="px-4 py-3">TEDx ID</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-100">
+                  {users.map((u) => (
+                    <tr key={u.uid}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
+                            {initials(u.name || u.email)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-neutral-900">{u.name}</p>
+                            <p className="text-xs text-neutral-500">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Select
+                          value={u.role}
+                          onChange={(e) => setRole(u, e.target.value as Role)}
+                          className="h-9 w-44"
+                        >
+                          {ASSIGNABLE_ROLES.map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Select
+                          value={u.departmentId ?? ""}
+                          onChange={(e) => setDepartment(u, e.target.value)}
+                          className="h-9 w-44"
+                          disabled={u.role !== "department_head" && u.role !== "volunteer"}
+                        >
+                          <option value="">—</option>
+                          {departments.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </Select>
+                      </td>
+                      <td className="px-4 py-3 text-neutral-600">{u.tedxId ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}

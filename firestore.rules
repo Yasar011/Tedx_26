@@ -1,0 +1,139 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return isSignedIn() ? me().role : 'anonymous';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && myRole() == 'admin';
+    }
+
+    function isCore() {
+      return isSignedIn() && (myRole() == 'admin' || myRole() == 'core');
+    }
+
+    function isDeptHead() {
+      return isSignedIn() && myRole() == 'department_head';
+    }
+
+    function myDepartmentId() {
+      return isSignedIn() ? me().departmentId : null;
+    }
+
+    function myDepartmentName() {
+      return get(/databases/$(database)/documents/departments/$(myDepartmentId())).data.name;
+    }
+
+    function onlyFieldsChanged(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ---------- USERS ----------
+    match /users/{userId} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId())
+      );
+
+      // Self-registration: new accounts start unassigned or applicant, never elevated.
+      allow create: if isSignedIn() &&
+        request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        request.resource.data.role in ['unassigned', 'applicant'] &&
+        request.resource.data.tedxId == null;
+
+      // Users may update their own non-sensitive fields only.
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        onlyFieldsChanged(['name']);
+
+      // Admin/Core manage roles, departments, TEDx IDs, and status during approvals.
+      allow update: if isCore();
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- DEPARTMENTS ----------
+    match /departments/{deptId} {
+      allow read: if true; // public: needed by the /apply form
+      allow write: if isAdmin();
+    }
+
+    // ---------- APPLICATIONS ----------
+    match /applications/{appId} {
+      allow read: if isSignedIn() && (
+        resource.data.applicantUserId == request.auth.uid ||
+        isCore() ||
+        (isDeptHead() && resource.data.departmentPreference == myDepartmentName())
+      );
+
+      allow create: if isSignedIn() &&
+        request.resource.data.applicantUserId == request.auth.uid &&
+        request.resource.data.status == 'SUBMITTED';
+
+      // Department Head progresses their own department's applicants.
+      allow update: if isDeptHead() &&
+        resource.data.departmentPreference == myDepartmentName() &&
+        onlyFieldsChanged(['status', 'updatedAt', 'reviewedBy', 'reviewedByName']) &&
+        request.resource.data.status in [
+          'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED', 'CORE_REVIEW'
+        ];
+
+      // Core/Admin make the final call.
+      allow update: if isCore() &&
+        onlyFieldsChanged(['status', 'updatedAt']);
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- INTERVIEWS ----------
+    match /interviews/{interviewId} {
+      allow read: if isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+
+      allow create: if isCore() ||
+        (isDeptHead() &&
+          request.resource.data.departmentId == myDepartmentId() &&
+          request.resource.data.interviewerUserId == request.auth.uid);
+
+      allow update: if (isDeptHead() &&
+          resource.data.departmentId == myDepartmentId() &&
+          onlyFieldsChanged(['notes', 'ratings', 'recommendation', 'submittedAt'])) ||
+        (isCore() && onlyFieldsChanged(['coreDecision']));
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- COUNTERS (TEDx ID generation) ----------
+    match /counters/{counterId} {
+      allow read, write: if isCore();
+    }
+
+    // ---------- SETTINGS ----------
+    match /settings/{docId} {
+      allow read: if true; // public: needed by the /apply form
+      allow write: if isAdmin();
+    }
+
+    // ---------- ACTIVITY LOGS (append-only audit trail) ----------
+    match /activityLogs/{logId} {
+      allow read: if isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+
+      allow create: if isSignedIn() && request.resource.data.actorId == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+  }
+}
