@@ -28,6 +28,9 @@ export interface UserProfile {
   tedxId: string | null;
   status: "active" | "inactive";
   createdAt: number;
+  /** Grants this person the same department-scoped permissions as a
+   *  Department Head, on top of their existing role. Set by Admin. */
+  isCoHead?: boolean;
 }
 
 export interface Department {
@@ -273,6 +276,20 @@ export interface EventDayState {
   registrationCount: number;
   registrationTarget: number;
   updatedAt: number;
+}
+
+// ---------- DIRECT MESSAGES ----------
+
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string;
+  recipientName: string;
+  subject: string;
+  body: string;
+  read: boolean;
+  createdAt: number;
 }
 
 // ---------- PHASE 4: INCIDENTS ----------

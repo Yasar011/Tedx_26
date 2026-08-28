@@ -19,6 +19,7 @@ import { logActivity } from "@/lib/activity";
 import { CloudinaryUploadResult } from "@/lib/cloudinary";
 import { toast } from "sonner";
 import { AlertTriangle, Plus } from "lucide-react";
+import { isDeptLead } from "@/lib/permissions";
 
 const emptyForm = {
   title: "",
@@ -39,7 +40,7 @@ export default function IssuesPage() {
   const [form, setForm] = useState(emptyForm);
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
 
-  const canManage = profile?.role === "admin" || profile?.role === "core" || profile?.role === "department_head";
+  const canManage = profile?.role === "admin" || profile?.role === "core" || isDeptLead(profile);
 
   async function load() {
     const [issueSnap, deptSnap, userSnap] = await Promise.all([

@@ -17,6 +17,7 @@ import { logActivity } from "@/lib/activity";
 import { CloudinaryUploadResult } from "@/lib/cloudinary";
 import { toast } from "sonner";
 import { FolderOpen, FileImage, FileVideo, File as FileIcon } from "lucide-react";
+import { isDeptLead } from "@/lib/permissions";
 
 export default function FilesPage() {
   const { profile } = useAuth();
@@ -25,7 +26,7 @@ export default function FilesPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("ALL");
 
-  const canModerate = profile?.role === "admin" || profile?.role === "core" || profile?.role === "department_head";
+  const canModerate = profile?.role === "admin" || profile?.role === "core" || isDeptLead(profile);
   const isPrivileged = profile?.role === "admin" || profile?.role === "core";
 
   async function load() {

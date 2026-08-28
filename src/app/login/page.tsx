@@ -16,6 +16,7 @@ import { FormField, Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { toast } from "sonner";
 import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
+import { logActivity } from "@/lib/activity";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -30,7 +31,15 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (mode === "signin") {
-        await signInWithEmailAndPassword(auth, email, password);
+        const cred = await signInWithEmailAndPassword(auth, email, password);
+        await logActivity({
+          actorId: cred.user.uid,
+          actorName: cred.user.displayName || email,
+          action: "USER_LOGGED_IN",
+          targetType: "user",
+          targetId: cred.user.uid,
+          message: `${cred.user.displayName || email} logged in`,
+        }).catch(() => {});
       } else {
         if (!isNiftEmail(email)) {
           toast.error(`Only ${NIFT_EMAIL_DOMAIN} email addresses can create an account`);

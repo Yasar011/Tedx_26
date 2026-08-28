@@ -54,7 +54,8 @@ export default function DepartmentPage() {
   }
 
   const head = team.find((t) => t.role === "department_head");
-  const volunteers = team.filter((t) => t.role === "volunteer");
+  const coHead = team.find((t) => t.isCoHead && t.uid !== head?.uid);
+  const volunteers = team.filter((t) => t.role === "volunteer" && t.uid !== coHead?.uid);
   const health = computeDepartmentHealth(tasks);
   const completedTasks = tasks.filter((t) => t.status === "COMPLETED").length;
 
@@ -130,15 +131,30 @@ export default function DepartmentPage() {
           <CardTitle>Team ({team.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          {head && (
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EB0028] text-xs font-semibold text-white">
-                {initials(head.name)}
-              </div>
-              <div>
-                <p className="text-sm font-medium text-neutral-900">{head.name}</p>
-                <p className="text-xs text-neutral-500">Department Head</p>
-              </div>
+          {(head || coHead) && (
+            <div className="mb-4 flex flex-wrap gap-6">
+              {head && (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EB0028] text-xs font-semibold text-white">
+                    {initials(head.name)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">{head.name}</p>
+                    <p className="text-xs text-neutral-500">Department Head</p>
+                  </div>
+                </div>
+              )}
+              {coHead && (
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-700 text-xs font-semibold text-white">
+                    {initials(coHead.name)}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-neutral-900">{coHead.name}</p>
+                    <p className="text-xs text-neutral-500">Co-Head</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {volunteers.length === 0 ? (

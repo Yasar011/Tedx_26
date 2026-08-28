@@ -17,6 +17,7 @@ import { logActivity } from "@/lib/activity";
 import { notifyMany } from "@/lib/notifications";
 import { toast } from "sonner";
 import { Megaphone, Plus } from "lucide-react";
+import { isDeptLead } from "@/lib/permissions";
 
 const PRIORITY_COLORS: Record<AnnouncementPriority, string> = {
   NORMAL: "bg-neutral-100 text-neutral-700",
@@ -38,7 +39,7 @@ export default function AnnouncementsPage() {
   });
 
   const canPostOrg = profile?.role === "admin" || profile?.role === "core";
-  const canPostDept = profile?.role === "department_head";
+  const canPostDept = isDeptLead(profile);
 
   async function load() {
     if (!profile) return;

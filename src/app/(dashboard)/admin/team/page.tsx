@@ -62,6 +62,22 @@ export default function AdminTeamPage() {
     load();
   }
 
+  async function toggleCoHead(user: UserProfile) {
+    const next = !user.isCoHead;
+    await updateDoc(doc(db, "users", user.uid), { isCoHead: next });
+    await logActivity({
+      actorId: profile!.uid,
+      actorName: profile!.name,
+      action: next ? "CO_HEAD_ASSIGNED" : "CO_HEAD_REMOVED",
+      targetType: "user",
+      targetId: user.uid,
+      message: `${profile!.name} ${next ? "made" : "removed"} ${user.name} ${next ? "a" : "as"} Co-Head`,
+      departmentId: user.departmentId,
+    });
+    toast.success(next ? `${user.name} is now a Co-Head` : `${user.name} is no longer a Co-Head`);
+    load();
+  }
+
   async function setTedxId(user: UserProfile, tedxId: string) {
     await updateDoc(doc(db, "users", user.uid), { tedxId: tedxId.trim() || null });
     await logActivity({
@@ -106,6 +122,7 @@ export default function AdminTeamPage() {
                     <th className="px-4 py-3">User</th>
                     <th className="px-4 py-3">Role</th>
                     <th className="px-4 py-3">Department</th>
+                    <th className="px-4 py-3">Co-Head</th>
                     <th className="px-4 py-3">TEDx ID</th>
                   </tr>
                 </thead>
@@ -146,6 +163,17 @@ export default function AdminTeamPage() {
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
                         </Select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <label className="flex items-center gap-2 text-xs text-neutral-600">
+                          <input
+                            type="checkbox"
+                            checked={!!u.isCoHead}
+                            onChange={() => toggleCoHead(u)}
+                            disabled={!u.departmentId || u.role === "department_head"}
+                          />
+                          Co-Head
+                        </label>
                       </td>
                       <td className="px-4 py-3">
                         <Input

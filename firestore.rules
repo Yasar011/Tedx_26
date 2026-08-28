@@ -23,8 +23,10 @@ service cloud.firestore {
       return isSignedIn() && (myRole() == 'admin' || myRole() == 'core');
     }
 
+    // A "department lead" is the official Department Head or a Co-Head —
+    // both get identical department-scoped permissions.
     function isDeptHead() {
-      return isSignedIn() && myRole() == 'department_head';
+      return isSignedIn() && (myRole() == 'department_head' || me().isCoHead == true);
     }
 
     function myDepartmentId() {
@@ -45,10 +47,16 @@ service cloud.firestore {
 
     // ---------- USERS ----------
     match /users/{userId} {
+      // Teammates (same department) and org leadership are visible to
+      // everyone — needed for team rosters, "who's my department head",
+      // and picking a message recipient. Cross-department member lists
+      // and applicant identities outside one's own scope stay hidden.
       allow read: if isSignedIn() && (
         request.auth.uid == userId ||
         isCore() ||
-        (isDeptHead() && resource.data.departmentId == myDepartmentId())
+        resource.data.role in ['admin', 'core'] ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId()) ||
+        (resource.data.departmentId != null && sameDept(resource.data.departmentId))
       );
 
       // Self-registration: new accounts start unassigned or applicant, never elevated,
@@ -242,6 +250,22 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.reportedBy == request.auth.uid;
       allow update: if isCore() || (isDeptHead() && sameDept(resource.data.departmentId));
       allow delete: if isAdmin();
+    }
+
+    // ---------- DIRECT MESSAGES ----------
+    match /messages/{messageId} {
+      allow read: if isSignedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+
+      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
+
+      // Either party can mark it read; only the recipient's read state matters.
+      allow update: if isSignedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid) &&
+        onlyFieldsChanged(['read']);
+
+      allow delete: if isSignedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
     }
 
     // ---------- ACTIVITY LOGS (append-only audit trail) ----------

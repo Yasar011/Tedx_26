@@ -29,6 +29,7 @@ import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notifications";
 import { recordFileUpload } from "@/lib/files";
 import { CloudinaryUploadResult } from "@/lib/cloudinary";
+import { isDeptLead } from "@/lib/permissions";
 import { toast } from "sonner";
 import { ArrowLeft, Paperclip } from "lucide-react";
 
@@ -74,7 +75,7 @@ export default function TaskDetailPage() {
   if (!task) return <p className="text-sm text-neutral-500">Task not found.</p>;
 
   const isAssignee = profile?.uid === task.assignedTo;
-  const isManager = profile?.role === "department_head" || profile?.role === "admin";
+  const isManager = isDeptLead(profile) || profile?.role === "admin";
   const dependencyBlocked = !!dependency && dependency.status !== "APPROVED" && dependency.status !== "COMPLETED";
 
   async function setStatus(status: TaskStatus, note?: string) {

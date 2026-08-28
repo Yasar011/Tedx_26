@@ -22,6 +22,7 @@ import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import { CalendarDays, Plus } from "lucide-react";
+import { isDeptLead } from "@/lib/permissions";
 
 export default function MeetingsPage() {
   const { profile } = useAuth();
@@ -32,7 +33,7 @@ export default function MeetingsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const canCreate = profile?.role === "admin" || profile?.role === "core" || profile?.role === "department_head";
+  const canCreate = profile?.role === "admin" || profile?.role === "core" || isDeptLead(profile);
 
   const [form, setForm] = useState({
     title: "",

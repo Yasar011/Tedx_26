@@ -22,6 +22,7 @@ import {
   BookOpen,
   Radio,
   AlertTriangle,
+  Mail,
 } from "lucide-react";
 
 interface NavItem {
@@ -45,6 +46,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
     { label: "Event Day", href: "/event-day", icon: Radio },
     { label: "Issues", href: "/issues", icon: AlertTriangle },
+    { label: "Messages", href: "/messages", icon: Mail },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ],
   core: [
@@ -58,6 +60,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
     { label: "Event Day", href: "/event-day", icon: Radio },
     { label: "Issues", href: "/issues", icon: AlertTriangle },
+    { label: "Messages", href: "/messages", icon: Mail },
   ],
   department_head: [
     { label: "Department", href: "/department", icon: Building2 },
@@ -68,6 +71,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Meetings", href: "/meetings", icon: CalendarDays },
     { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
     { label: "Issues", href: "/issues", icon: AlertTriangle },
+    { label: "Messages", href: "/messages", icon: Mail },
   ],
   volunteer: [
     { label: "My Dashboard", href: "/volunteer", icon: LayoutDashboard },
@@ -77,18 +81,29 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Meetings", href: "/meetings", icon: CalendarDays },
     { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
     { label: "Issues", href: "/issues", icon: AlertTriangle },
+    { label: "Messages", href: "/messages", icon: Mail },
   ],
   applicant: [
     { label: "My Application", href: "/applicant", icon: ClipboardList },
+    { label: "Messages", href: "/messages", icon: Mail },
   ],
   unassigned: [
     { label: "Pending", href: "/pending", icon: Award },
   ],
 };
 
-export function Sidebar({ role }: { role: Role }) {
+export function Sidebar({ role, isCoHead }: { role: Role; isCoHead?: boolean }) {
   const pathname = usePathname();
-  const items = NAV_BY_ROLE[role] ?? [];
+  let items = NAV_BY_ROLE[role] ?? [];
+
+  // Co-Heads get the same department-lead nav as a Department Head,
+  // layered on top of whatever their base role already shows.
+  if (isCoHead && role !== "department_head" && role !== "admin") {
+    const leadOnly = NAV_BY_ROLE.department_head.filter(
+      (leadItem) => !items.some((i) => i.href === leadItem.href)
+    );
+    items = [...leadOnly, ...items];
+  }
 
   return (
     <aside className="hidden w-60 shrink-0 overflow-y-auto border-r border-neutral-200 bg-white md:flex md:flex-col">

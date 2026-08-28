@@ -16,6 +16,7 @@ export default function VolunteerPage() {
   const { profile } = useAuth();
   const [department, setDepartment] = useState<Department | null>(null);
   const [head, setHead] = useState<UserProfile | null>(null);
+  const [coHead, setCoHead] = useState<UserProfile | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,14 +28,8 @@ export default function VolunteerPage() {
         const deptSnap = await getDoc(doc(db, "departments", profile.departmentId));
         if (deptSnap.exists()) setDepartment({ id: deptSnap.id, ...deptSnap.data() } as Department);
 
-        const [headSnap, taskSnap, orgAnnSnap, deptAnnSnap] = await Promise.all([
-          getDocs(
-            query(
-              collection(db, "users"),
-              where("departmentId", "==", profile.departmentId),
-              where("role", "==", "department_head")
-            )
-          ),
+        const [teamSnap, taskSnap, orgAnnSnap, deptAnnSnap] = await Promise.all([
+          getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId))),
           getDocs(query(collection(db, "tasks"), where("assignedTo", "==", profile.uid))),
           getDocs(query(collection(db, "announcements"), where("scope", "==", "org"))),
           getDocs(
@@ -45,7 +40,10 @@ export default function VolunteerPage() {
             )
           ),
         ]);
-        if (!headSnap.empty) setHead(headSnap.docs[0].data() as UserProfile);
+        const team = teamSnap.docs.map((d) => d.data() as UserProfile);
+        const foundHead = team.find((t) => t.role === "department_head") ?? null;
+        setHead(foundHead);
+        setCoHead(team.find((t) => t.isCoHead && t.uid !== foundHead?.uid) ?? null);
         setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)).sort((a, b) => b.createdAt - a.createdAt));
         const anns = [
           ...orgAnnSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement)),
@@ -80,6 +78,12 @@ export default function VolunteerPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Department Head</p>
             <p className="text-lg font-semibold text-neutral-900">{head?.name ?? "—"}</p>
           </div>
+          {coHead && (
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Co-Head</p>
+              <p className="text-lg font-semibold text-neutral-900">{coHead.name}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -25,6 +25,7 @@ import { TASK_PRIORITY_COLORS, TASK_STATUS_COLORS, TASK_STATUS_LABELS } from "@/
 import { formatDate } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { notify } from "@/lib/notifications";
+import { isDeptLead } from "@/lib/permissions";
 import { toast } from "sonner";
 import { ClipboardList, Plus } from "lucide-react";
 
@@ -57,7 +58,7 @@ export default function TasksPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
 
-  const canManage = profile?.role === "department_head" || profile?.role === "admin";
+  const canManage = isDeptLead(profile) || profile?.role === "admin";
 
   async function load() {
     if (!profile) return;
@@ -74,14 +75,13 @@ export default function TasksPage() {
     const deptSnap = await getDoc(doc(db, "departments", profile.departmentId));
     if (deptSnap.exists()) setDepartment({ id: deptSnap.id, ...deptSnap.data() } as Department);
 
-    const taskQuery =
-      profile.role === "volunteer"
-        ? query(
-            collection(db, "tasks"),
-            where("departmentId", "==", profile.departmentId),
-            where("assignedTo", "==", profile.uid)
-          )
-        : query(collection(db, "tasks"), where("departmentId", "==", profile.departmentId));
+    const taskQuery = isDeptLead(profile)
+      ? query(collection(db, "tasks"), where("departmentId", "==", profile.departmentId))
+      : query(
+          collection(db, "tasks"),
+          where("departmentId", "==", profile.departmentId),
+          where("assignedTo", "==", profile.uid)
+        );
 
     const [taskSnap, teamSnap] = await Promise.all([
       getDocs(taskQuery),
