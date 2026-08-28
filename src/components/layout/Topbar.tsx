@@ -5,6 +5,7 @@ import { ROLE_LABELS } from "@/lib/constants";
 import { initials } from "@/lib/utils";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { NotificationBell } from "./NotificationBell";
 
 export function Topbar() {
   const { profile, signOut } = useAuth();
@@ -19,6 +20,7 @@ export function Topbar() {
         {profile.tedxId && <p className="text-xs text-neutral-500">{profile.tedxId}</p>}
       </div>
       <div className="flex items-center gap-3">
+        <NotificationBell />
         <div className="flex h-9 w-9 items-center justify-center rounded-full bg-neutral-900 text-xs font-semibold text-white">
           {initials(profile.name || profile.email)}
         </div>

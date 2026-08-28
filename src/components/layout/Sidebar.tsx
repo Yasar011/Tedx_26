@@ -14,6 +14,14 @@ import {
   ClipboardList,
   UserCheck,
   Award,
+  ListTodo,
+  FolderOpen,
+  Megaphone,
+  CalendarDays,
+  BarChart3,
+  BookOpen,
+  Radio,
+  AlertTriangle,
 } from "lucide-react";
 
 interface NavItem {
@@ -29,18 +37,46 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Departments", href: "/admin/departments", icon: Building2 },
     { label: "Team", href: "/admin/team", icon: Users },
     { label: "Approvals", href: "/core/approvals", icon: CheckSquare },
+    { label: "Tasks", href: "/tasks", icon: ListTodo },
+    { label: "Files", href: "/files", icon: FolderOpen },
+    { label: "Announcements", href: "/announcements", icon: Megaphone },
+    { label: "Meetings", href: "/meetings", icon: CalendarDays },
+    { label: "Reports", href: "/reports", icon: BarChart3 },
+    { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
+    { label: "Event Day", href: "/event-day", icon: Radio },
+    { label: "Issues", href: "/issues", icon: AlertTriangle },
     { label: "Settings", href: "/admin/settings", icon: Settings },
   ],
   core: [
     { label: "Approval Center", href: "/core/approvals", icon: CheckSquare },
     { label: "Applications", href: "/admin/applications", icon: FileText },
+    { label: "Tasks", href: "/tasks", icon: ListTodo },
+    { label: "Files", href: "/files", icon: FolderOpen },
+    { label: "Announcements", href: "/announcements", icon: Megaphone },
+    { label: "Meetings", href: "/meetings", icon: CalendarDays },
+    { label: "Reports", href: "/reports", icon: BarChart3 },
+    { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
+    { label: "Event Day", href: "/event-day", icon: Radio },
+    { label: "Issues", href: "/issues", icon: AlertTriangle },
   ],
   department_head: [
     { label: "Department", href: "/department", icon: Building2 },
     { label: "Applicants", href: "/department/applicants", icon: UserCheck },
+    { label: "Tasks", href: "/tasks", icon: ListTodo },
+    { label: "Files", href: "/files", icon: FolderOpen },
+    { label: "Announcements", href: "/announcements", icon: Megaphone },
+    { label: "Meetings", href: "/meetings", icon: CalendarDays },
+    { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
+    { label: "Issues", href: "/issues", icon: AlertTriangle },
   ],
   volunteer: [
     { label: "My Dashboard", href: "/volunteer", icon: LayoutDashboard },
+    { label: "Tasks", href: "/tasks", icon: ListTodo },
+    { label: "Files", href: "/files", icon: FolderOpen },
+    { label: "Announcements", href: "/announcements", icon: Megaphone },
+    { label: "Meetings", href: "/meetings", icon: CalendarDays },
+    { label: "Knowledge Base", href: "/knowledge-base", icon: BookOpen },
+    { label: "Issues", href: "/issues", icon: AlertTriangle },
   ],
   applicant: [
     { label: "My Application", href: "/applicant", icon: ClipboardList },
@@ -55,8 +91,8 @@ export function Sidebar({ role }: { role: Role }) {
   const items = NAV_BY_ROLE[role] ?? [];
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-neutral-200 bg-white md:flex md:flex-col">
-      <div className="flex h-16 items-center gap-2 border-b border-neutral-200 px-5">
+    <aside className="hidden w-60 shrink-0 overflow-y-auto border-r border-neutral-200 bg-white md:flex md:flex-col">
+      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-neutral-200 px-5">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#EB0028] text-sm font-bold text-white">
           TX
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   updateDoc,
@@ -14,11 +15,11 @@ import { Department } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Textarea } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
+import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { Building2, Plus, Pencil } from "lucide-react";
+import { Building2, Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
 import { DEFAULT_DEPARTMENTS } from "@/lib/constants";
@@ -40,6 +41,8 @@ export default function AdminDepartmentsPage() {
   const [editing, setEditing] = useState<Department | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Department | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   async function load() {
     const snap = await getDocs(collection(db, "departments"));
@@ -120,6 +123,27 @@ export default function AdminDepartmentsPage() {
     load();
   }
 
+  async function confirmDelete() {
+    if (!deleteTarget || !profile) return;
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, "departments", deleteTarget.id));
+      await logActivity({
+        actorId: profile.uid,
+        actorName: profile.name,
+        action: "DEPARTMENT_DELETED",
+        targetType: "department",
+        targetId: deleteTarget.id,
+        message: `${profile.name} deleted department ${deleteTarget.name}`,
+      });
+      toast.success("Department deleted");
+      setDeleteTarget(null);
+      load();
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   async function seedDefaults() {
     if (!profile) return;
     setSaving(true);
@@ -179,9 +203,14 @@ export default function AdminDepartmentsPage() {
                     <p className="font-semibold text-neutral-900">{dept.name}</p>
                     <p className="text-xs text-neutral-500">{dept.code}</p>
                   </div>
-                  <button onClick={() => openEdit(dept)} className="text-neutral-400 hover:text-neutral-700">
-                    <Pencil className="h-4 w-4" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button onClick={() => openEdit(dept)} className="text-neutral-400 hover:text-neutral-700">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setDeleteTarget(dept)} className="text-neutral-400 hover:text-red-600">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <p className="line-clamp-2 text-sm text-neutral-600">{dept.description || "No description yet."}</p>
                 <div className="flex flex-wrap gap-2">
@@ -235,6 +264,17 @@ export default function AdminDepartmentsPage() {
           </Button>
         </div>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Department"
+        description={`Delete "${deleteTarget?.name}"? This does not delete its members, tasks, or files, but they will be orphaned. This cannot be undone.`}
+        confirmLabel="Delete"
+        danger
+        loading={deleting}
+      />
     </div>
   );
 }

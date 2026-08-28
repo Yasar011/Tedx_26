@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth";
+import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
 import {
   addDoc,
   collection,
@@ -26,6 +27,7 @@ import { Ban } from "lucide-react";
 
 export default function ApplyPage() {
   const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [settings, setSettings] = useState<EventSettings | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -50,13 +52,18 @@ export default function ApplyPage() {
 
   useEffect(() => {
     (async () => {
-      const [deptSnap, settingsSnap] = await Promise.all([
-        getDocs(query(collection(db, "departments"), where("active", "==", true))),
-        getDoc(doc(db, "settings", "event")),
-      ]);
-      setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
-      setSettings(settingsSnap.exists() ? (settingsSnap.data() as EventSettings) : null);
-      setLoadingData(false);
+      try {
+        const [deptSnap, settingsSnap] = await Promise.all([
+          getDocs(query(collection(db, "departments"), where("active", "==", true))),
+          getDoc(doc(db, "settings", "event")),
+        ]);
+        setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
+        setSettings(settingsSnap.exists() ? (settingsSnap.data() as EventSettings) : null);
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "Could not load the application form");
+      } finally {
+        setLoadingData(false);
+      }
     })();
   }, []);
 
@@ -66,10 +73,15 @@ export default function ApplyPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!isNiftEmail(form.email)) {
+      toast.error(`Only ${NIFT_EMAIL_DOMAIN} email addresses can apply`);
+      return;
+    }
     setSubmitting(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await updateProfile(cred.user, { displayName: form.name });
+      await sendEmailVerification(cred.user);
       await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
         email: form.email,
@@ -118,6 +130,18 @@ export default function ApplyPage() {
   }
 
   if (loadingData) return <FullPageSpinner />;
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+        <EmptyState
+          icon={Ban}
+          title="Could not load the application form"
+          description="Please try again in a moment. If this keeps happening, contact the organizing team."
+        />
+      </div>
+    );
+  }
 
   if (settings && settings.applicationsOpen === false) {
     return (
@@ -178,7 +202,7 @@ export default function ApplyPage() {
               </div>
 
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Email" required hint="You'll use this to sign in and check status">
+                <FormField label="Email" required hint={`Must end in ${NIFT_EMAIL_DOMAIN} — you'll use this to sign in and check status`}>
                   <Input
                     type="email"
                     required

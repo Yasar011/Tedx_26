@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Department, Role, UserProfile } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Select } from "@/components/ui/Input";
+import { Input, Select } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ROLE_LABELS } from "@/lib/constants";
@@ -22,6 +22,8 @@ export default function AdminTeamPage() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [tedxIdDrafts, setTedxIdDrafts] = useState<Record<string, string>>({});
 
   async function load() {
     const [userSnap, deptSnap] = await Promise.all([
@@ -60,16 +62,39 @@ export default function AdminTeamPage() {
     load();
   }
 
+  async function setTedxId(user: UserProfile, tedxId: string) {
+    await updateDoc(doc(db, "users", user.uid), { tedxId: tedxId.trim() || null });
+    await logActivity({
+      actorId: profile!.uid,
+      actorName: profile!.name,
+      action: "TEDX_ID_OVERRIDDEN",
+      targetType: "user",
+      targetId: user.uid,
+      message: `${profile!.name} manually set ${user.name}'s TEDx ID to "${tedxId.trim() || "none"}"`,
+    });
+    toast.success(`${user.name}'s TEDx ID updated`);
+    load();
+  }
+
   if (loading) return <FullPageSpinner />;
+
+  const filtered = users.filter(
+    (u) =>
+      u.name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email?.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-neutral-900">Team Management</h1>
-        <p className="text-sm text-neutral-500">{users.length} accounts</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-neutral-900">Team Management</h1>
+          <p className="text-sm text-neutral-500">{users.length} accounts</p>
+        </div>
+        <Input placeholder="Search name or email" value={search} onChange={(e) => setSearch(e.target.value)} className="w-64" />
       </div>
 
-      {users.length === 0 ? (
+      {filtered.length === 0 ? (
         <EmptyState icon={Users} title="No accounts yet" />
       ) : (
         <Card>
@@ -85,7 +110,7 @@ export default function AdminTeamPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
-                  {users.map((u) => (
+                  {filtered.map((u) => (
                     <tr key={u.uid}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
@@ -122,7 +147,17 @@ export default function AdminTeamPage() {
                           ))}
                         </Select>
                       </td>
-                      <td className="px-4 py-3 text-neutral-600">{u.tedxId ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        <Input
+                          className="h-9 w-36"
+                          value={tedxIdDrafts[u.uid] ?? u.tedxId ?? ""}
+                          onChange={(e) => setTedxIdDrafts((d) => ({ ...d, [u.uid]: e.target.value }))}
+                          onBlur={(e) => {
+                            if (e.target.value !== (u.tedxId ?? "")) setTedxId(u, e.target.value);
+                          }}
+                          placeholder="—"
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

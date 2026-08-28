@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   collection,
   doc,
+  getCountFromServer,
   getDocs,
   query,
   updateDoc,
@@ -36,12 +38,18 @@ export default function ApprovalCenterPage() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [comments, setComments] = useState<Record<string, string>>({});
+  const [pendingFiles, setPendingFiles] = useState(0);
+  const [pendingTasks, setPendingTasks] = useState(0);
 
   async function load() {
-    const [appSnap, deptSnap] = await Promise.all([
+    const [appSnap, deptSnap, pendingFilesCount, pendingTasksCount] = await Promise.all([
       getDocs(query(collection(db, "applications"), where("status", "==", "CORE_REVIEW"))),
       getDocs(collection(db, "departments")),
+      getCountFromServer(query(collection(db, "files"), where("approvalStatus", "==", "PENDING"))),
+      getCountFromServer(query(collection(db, "tasks"), where("status", "==", "SUBMITTED_FOR_REVIEW"))),
     ]);
+    setPendingFiles(pendingFilesCount.data().count);
+    setPendingTasks(pendingTasksCount.data().count);
     const depts = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
     setDepartments(depts);
 
@@ -141,9 +149,32 @@ export default function ApprovalCenterPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-semibold text-neutral-900">Approval Center</h1>
-        <p className="text-sm text-neutral-500">
-          {rows.length} application{rows.length !== 1 && "s"} awaiting Core Team decision
-        </p>
+        <p className="text-sm text-neutral-500">Everything currently waiting on a Core/Admin decision.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card>
+          <CardContent className="py-4">
+            <p className="text-xs font-medium uppercase text-neutral-400">Volunteer Applications</p>
+            <p className="text-2xl font-bold text-neutral-900">{rows.length}</p>
+          </CardContent>
+        </Card>
+        <Link href="/files">
+          <Card className="hover:border-neutral-300">
+            <CardContent className="py-4">
+              <p className="text-xs font-medium uppercase text-neutral-400">Pending Files</p>
+              <p className="text-2xl font-bold text-neutral-900">{pendingFiles}</p>
+            </CardContent>
+          </Card>
+        </Link>
+        <Link href="/tasks">
+          <Card className="hover:border-neutral-300">
+            <CardContent className="py-4">
+              <p className="text-xs font-medium uppercase text-neutral-400">Tasks Submitted for Review</p>
+              <p className="text-2xl font-bold text-neutral-900">{pendingTasks}</p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {rows.length === 0 ? (

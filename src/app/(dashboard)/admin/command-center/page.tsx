@@ -11,10 +11,11 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { ActivityLog, Department } from "@/lib/types";
+import { ActivityLog, Department, Task } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { formatDateTime } from "@/lib/utils";
+import { computeDepartmentHealth } from "@/lib/departmentHealth";
 import {
   Users,
   UserCheck,
@@ -22,6 +23,8 @@ import {
   Clock,
   CheckSquare,
   Building2,
+  ListTodo,
+  AlertTriangle,
 } from "lucide-react";
 
 interface Stats {
@@ -31,6 +34,9 @@ interface Stats {
   pendingApplications: number;
   pendingInterviews: number;
   pendingApprovals: number;
+  activeTasks: number;
+  overdueTasks: number;
+  openIssues: number;
 }
 
 interface DeptHealth {
@@ -39,10 +45,18 @@ interface DeptHealth {
   total: number;
 }
 
+interface DeptTaskHealth {
+  department: Department;
+  score: number;
+  label: string;
+  emoji: string;
+}
+
 export default function CommandCenterPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [activity, setActivity] = useState<ActivityLog[]>([]);
   const [deptHealth, setDeptHealth] = useState<DeptHealth[]>([]);
+  const [deptTaskHealth, setDeptTaskHealth] = useState<DeptTaskHealth[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -50,17 +64,35 @@ export default function CommandCenterPage() {
       const usersRef = collection(db, "users");
       const appsRef = collection(db, "applications");
 
-      const [coreCount, volCount, applicantCount, pendingAppsCount, pendingInterviewCount, pendingApprovalCount, deptSnap, activitySnap] =
-        await Promise.all([
-          getCountFromServer(query(usersRef, where("role", "in", ["admin", "core"]))),
-          getCountFromServer(query(usersRef, where("role", "==", "volunteer"))),
-          getCountFromServer(query(usersRef, where("role", "==", "applicant"))),
-          getCountFromServer(query(appsRef, where("status", "in", ["SUBMITTED", "UNDER_REVIEW"]))),
-          getCountFromServer(query(appsRef, where("status", "==", "INTERVIEW_SCHEDULED"))),
-          getCountFromServer(query(appsRef, where("status", "==", "CORE_REVIEW"))),
-          getDocs(collection(db, "departments")),
-          getDocs(query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(12))),
-        ]);
+      const [
+        coreCount,
+        volCount,
+        applicantCount,
+        pendingAppsCount,
+        pendingInterviewCount,
+        pendingApprovalCount,
+        deptSnap,
+        activitySnap,
+        allTasksSnap,
+        openIssuesCount,
+      ] = await Promise.all([
+        getCountFromServer(query(usersRef, where("role", "in", ["admin", "core"]))),
+        getCountFromServer(query(usersRef, where("role", "==", "volunteer"))),
+        getCountFromServer(query(usersRef, where("role", "==", "applicant"))),
+        getCountFromServer(query(appsRef, where("status", "in", ["SUBMITTED", "UNDER_REVIEW"]))),
+        getCountFromServer(query(appsRef, where("status", "==", "INTERVIEW_SCHEDULED"))),
+        getCountFromServer(query(appsRef, where("status", "==", "CORE_REVIEW"))),
+        getDocs(collection(db, "departments")),
+        getDocs(query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(12))),
+        getDocs(collection(db, "tasks")),
+        getCountFromServer(
+          query(collection(db, "issues"), where("status", "in", ["REPORTED", "ASSIGNED", "IN_PROGRESS"]))
+        ),
+      ]);
+
+      const allTasks = allTasksSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task));
+      const activeTasks = allTasks.filter((t) => t.status !== "COMPLETED").length;
+      const overdueTasks = allTasks.filter((t) => t.deadline && t.deadline < Date.now() && t.status !== "COMPLETED").length;
 
       setStats({
         coreTeam: coreCount.data().count,
@@ -69,6 +101,9 @@ export default function CommandCenterPage() {
         pendingApplications: pendingAppsCount.data().count,
         pendingInterviews: pendingInterviewCount.data().count,
         pendingApprovals: pendingApprovalCount.data().count,
+        activeTasks,
+        overdueTasks,
+        openIssues: openIssuesCount.data().count,
       });
 
       const departments = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
@@ -85,6 +120,14 @@ export default function CommandCenterPage() {
       );
       setDeptHealth(health);
 
+      setDeptTaskHealth(
+        departments.map((department) => {
+          const deptTasks = allTasks.filter((t) => t.departmentId === department.id);
+          const { score, label, emoji } = computeDepartmentHealth(deptTasks);
+          return { department, score, label, emoji };
+        })
+      );
+
       setActivity(activitySnap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityLog)));
       setLoading(false);
     })();
@@ -99,6 +142,9 @@ export default function CommandCenterPage() {
     { label: "Pending Applications", value: stats.pendingApplications, icon: Clock },
     { label: "Pending Interviews", value: stats.pendingInterviews, icon: Clock },
     { label: "Pending Core Approvals", value: stats.pendingApprovals, icon: CheckSquare },
+    { label: "Active Tasks", value: stats.activeTasks, icon: ListTodo },
+    { label: "Overdue Tasks", value: stats.overdueTasks, icon: AlertTriangle },
+    { label: "Open Issues", value: stats.openIssues, icon: AlertTriangle },
   ];
 
   return (
@@ -140,6 +186,19 @@ export default function CommandCenterPage() {
                 </div>
               );
             })}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Department Health (Tasks)</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {deptTaskHealth.length === 0 && <p className="text-sm text-neutral-500">No departments configured yet.</p>}
+            {deptTaskHealth.map(({ department, score, label, emoji }) => (
+              <div key={department.id} className="flex items-center justify-between text-sm">
+                <span className="font-medium text-neutral-800">{department.name}</span>
+                <span className="text-neutral-500">{emoji} {score}% · {label}</span>
+              </div>
+            ))}
           </CardContent>
         </Card>
 

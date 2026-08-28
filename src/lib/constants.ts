@@ -1,4 +1,11 @@
-import { ApplicationStatus, Role } from "./types";
+import {
+  ApplicationStatus,
+  IssuePriority,
+  IssueStatus,
+  Role,
+  TaskPriority,
+  TaskStatus,
+} from "./types";
 
 export const DEFAULT_DEPARTMENTS = [
   { name: "PR & Outreach", code: "PR" },
@@ -55,6 +62,52 @@ export const ROLE_HOME_ROUTE: Record<Role, string> = {
   volunteer: "/volunteer",
   applicant: "/applicant",
   unassigned: "/pending",
+};
+
+export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  TO_DO: "To Do",
+  IN_PROGRESS: "In Progress",
+  SUBMITTED_FOR_REVIEW: "Submitted for Review",
+  REVISION_REQUIRED: "Revision Required",
+  APPROVED: "Approved",
+  COMPLETED: "Completed",
+};
+
+export const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
+  TO_DO: "bg-neutral-100 text-neutral-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  SUBMITTED_FOR_REVIEW: "bg-amber-100 text-amber-700",
+  REVISION_REQUIRED: "bg-red-100 text-red-700",
+  APPROVED: "bg-emerald-100 text-emerald-700",
+  COMPLETED: "bg-neutral-800 text-white",
+};
+
+export const TASK_PRIORITY_COLORS: Record<TaskPriority, string> = {
+  LOW: "bg-neutral-100 text-neutral-600",
+  MEDIUM: "bg-blue-100 text-blue-700",
+  HIGH: "bg-amber-100 text-amber-700",
+  CRITICAL: "bg-red-100 text-red-700",
+};
+
+export const ISSUE_STATUS_LABELS: Record<IssueStatus, string> = {
+  REPORTED: "Reported",
+  ASSIGNED: "Assigned",
+  IN_PROGRESS: "In Progress",
+  RESOLVED: "Resolved",
+};
+
+export const ISSUE_STATUS_COLORS: Record<IssueStatus, string> = {
+  REPORTED: "bg-red-100 text-red-700",
+  ASSIGNED: "bg-amber-100 text-amber-700",
+  IN_PROGRESS: "bg-blue-100 text-blue-700",
+  RESOLVED: "bg-emerald-100 text-emerald-700",
+};
+
+export const ISSUE_PRIORITY_COLORS: Record<IssuePriority, string> = {
+  LOW: "bg-neutral-100 text-neutral-600",
+  MEDIUM: "bg-blue-100 text-blue-700",
+  HIGH: "bg-amber-100 text-amber-700",
+  CRITICAL: "bg-red-100 text-red-700",
 };
 
 export const TEDX_BRAND_RED = "#EB0028";

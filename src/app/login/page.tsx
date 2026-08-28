@@ -7,6 +7,7 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  sendEmailVerification,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { toast } from "sonner";
+import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -30,6 +32,10 @@ export default function LoginPage() {
       if (mode === "signin") {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
+        if (!isNiftEmail(email)) {
+          toast.error(`Only ${NIFT_EMAIL_DOMAIN} email addresses can create an account`);
+          return;
+        }
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: name });
         await setDoc(doc(db, "users", cred.user.uid), {
@@ -42,6 +48,7 @@ export default function LoginPage() {
           status: "active",
           createdAt: Date.now(),
         });
+        await sendEmailVerification(cred.user);
       }
       router.replace("/dashboard");
     } catch (err) {
@@ -87,7 +94,7 @@ export default function LoginPage() {
                 <Input value={name} onChange={(e) => setName(e.target.value)} required />
               </FormField>
             )}
-            <FormField label="Email" required>
+            <FormField label="Email" required hint={mode === "signup" ? `Must end in ${NIFT_EMAIL_DOMAIN}` : undefined}>
               <Input
                 type="email"
                 value={email}

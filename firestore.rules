@@ -35,6 +35,10 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/departments/$(myDepartmentId())).data.name;
     }
 
+    function sameDept(deptId) {
+      return isSignedIn() && myDepartmentId() == deptId;
+    }
+
     function onlyFieldsChanged(fields) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
@@ -47,12 +51,14 @@ service cloud.firestore {
         (isDeptHead() && resource.data.departmentId == myDepartmentId())
       );
 
-      // Self-registration: new accounts start unassigned or applicant, never elevated.
+      // Self-registration: new accounts start unassigned or applicant, never elevated,
+      // and must use an @nift.ac.in email (defense-in-depth; also enforced client-side).
       allow create: if isSignedIn() &&
         request.auth.uid == userId &&
         request.resource.data.uid == userId &&
         request.resource.data.role in ['unassigned', 'applicant'] &&
-        request.resource.data.tedxId == null;
+        request.resource.data.tedxId == null &&
+        request.resource.data.email.lower().matches('.*@nift[.]ac[.]in$');
 
       // Users may update their own non-sensitive fields only.
       allow update: if isSignedIn() && request.auth.uid == userId &&
@@ -67,7 +73,11 @@ service cloud.firestore {
     // ---------- DEPARTMENTS ----------
     match /departments/{deptId} {
       allow read: if true; // public: needed by the /apply form
-      allow write: if isAdmin();
+      // Department Heads may edit their own department's descriptive fields.
+      allow update: if isDeptHead() && sameDept(deptId) &&
+        onlyFieldsChanged(['description', 'purpose', 'responsibilities', 'goals', 'guidelines']);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin();
     }
 
     // ---------- APPLICATIONS ----------
@@ -94,6 +104,9 @@ service cloud.firestore {
       allow update: if isCore() &&
         onlyFieldsChanged(['status', 'updatedAt']);
 
+      // Admin has unrestricted override on any field (correcting data, etc).
+      allow update: if isAdmin();
+
       allow delete: if isAdmin();
     }
 
@@ -110,7 +123,8 @@ service cloud.firestore {
       allow update: if (isDeptHead() &&
           resource.data.departmentId == myDepartmentId() &&
           onlyFieldsChanged(['notes', 'ratings', 'recommendation', 'submittedAt'])) ||
-        (isCore() && onlyFieldsChanged(['coreDecision']));
+        (isCore() && onlyFieldsChanged(['coreDecision'])) ||
+        isAdmin();
 
       allow delete: if isAdmin();
     }
@@ -122,8 +136,112 @@ service cloud.firestore {
 
     // ---------- SETTINGS ----------
     match /settings/{docId} {
-      allow read: if true; // public: needed by the /apply form
+      allow read: if true; // public: needed by the /apply form and public event-day display
+      allow write: if (docId == 'eventDay' && isCore()) || (docId != 'eventDay' && isAdmin());
+    }
+
+    // ---------- TASKS ----------
+    match /tasks/{taskId} {
+      allow read: if isCore() ||
+        (isSignedIn() && sameDept(resource.data.departmentId));
+
+      allow create: if isCore() ||
+        (isDeptHead() && request.resource.data.departmentId == myDepartmentId());
+
+      // Managers (Core/Admin/matching Dept Head) can fully manage a task.
+      allow update: if isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+
+      // The assignee may update their own progress fields only.
+      allow update: if isSignedIn() &&
+        request.auth.uid == resource.data.assignedTo &&
+        onlyFieldsChanged(['status', 'attachments', 'updatedAt']);
+
+      allow delete: if isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+    }
+
+    // ---------- TASK COMMENTS ----------
+    match /taskComments/{commentId} {
+      function taskDept() {
+        return get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.departmentId;
+      }
+      function newTaskDept() {
+        return get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.departmentId;
+      }
+
+      allow read: if isCore() || sameDept(taskDept());
+      allow create: if isSignedIn() &&
+        request.resource.data.authorId == request.auth.uid &&
+        (isCore() || sameDept(newTaskDept()));
+      allow update, delete: if false;
+    }
+
+    // ---------- FILES (Cloudinary metadata) ----------
+    match /files/{fileId} {
+      allow read: if isCore() ||
+        resource.data.uploadedBy == request.auth.uid ||
+        (resource.data.departmentId != null && sameDept(resource.data.departmentId));
+
+      allow create: if isSignedIn() && request.resource.data.uploadedBy == request.auth.uid;
+
+      allow update: if (isCore() || (isDeptHead() && sameDept(resource.data.departmentId))) &&
+        onlyFieldsChanged(['approvalStatus', 'approvedBy', 'approvedByName']);
+
+      // Admin has unrestricted override on any field.
+      allow update: if isAdmin();
+
+      allow delete: if isCore() || resource.data.uploadedBy == request.auth.uid;
+    }
+
+    // ---------- ANNOUNCEMENTS ----------
+    match /announcements/{announcementId} {
+      allow read: if isSignedIn() && (
+        resource.data.scope == 'org' ||
+        isCore() ||
+        sameDept(resource.data.departmentId)
+      );
+
+      allow create: if isCore() ||
+        (isDeptHead() &&
+          request.resource.data.scope == 'department' &&
+          request.resource.data.departmentId == myDepartmentId());
+
+      allow update, delete: if isCore() ||
+        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+    }
+
+    // ---------- NOTIFICATIONS ----------
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid &&
+        onlyFieldsChanged(['read']);
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ---------- MEETINGS ----------
+    match /meetings/{meetingId} {
+      allow read: if isCore() || isDeptHead() ||
+        (isSignedIn() && request.auth.uid in resource.data.attendees);
+
+      allow create: if isCore() || isDeptHead();
+      allow update: if isCore() || isDeptHead();
+      allow delete: if isCore();
+    }
+
+    // ---------- KNOWLEDGE BASE ----------
+    match /knowledgeBase/{articleId} {
+      allow read: if isSignedIn();
       allow write: if isAdmin();
+    }
+
+    // ---------- ISSUES / INCIDENTS ----------
+    match /issues/{issueId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.reportedBy == request.auth.uid;
+      allow update: if isCore() || (isDeptHead() && sameDept(resource.data.departmentId));
+      allow delete: if isAdmin();
     }
 
     // ---------- ACTIVITY LOGS (append-only audit trail) ----------
