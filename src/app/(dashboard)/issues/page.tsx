@@ -20,6 +20,7 @@ import { CloudinaryUploadResult } from "@/lib/cloudinary";
 import { toast } from "sonner";
 import { AlertTriangle, Plus } from "lucide-react";
 import { isDeptLead } from "@/lib/permissions";
+import { fetchVisibleUsers } from "@/lib/directory";
 
 const emptyForm = {
   title: "",
@@ -35,6 +36,7 @@ export default function IssuesPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -43,20 +45,34 @@ export default function IssuesPage() {
   const canManage = profile?.role === "admin" || profile?.role === "core" || isDeptLead(profile);
 
   async function load() {
-    const [issueSnap, deptSnap, userSnap] = await Promise.all([
-      getDocs(collection(db, "issues")),
-      getDocs(collection(db, "departments")),
-      getDocs(collection(db, "users")),
-    ]);
-    setIssues(issueSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Issue)).sort((a, b) => b.createdAt - a.createdAt));
-    setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
-    setUsers(userSnap.docs.map((d) => d.data() as UserProfile));
-    setLoading(false);
+    if (!profile) return;
+    try {
+      const [issueSnap, deptSnap, visibleUsers] = await Promise.all([
+        getDocs(collection(db, "issues")),
+        getDocs(collection(db, "departments")),
+        // Only Admin/Core may read the full user list; anyone else must
+        // ask for the subset their rules allow or the query is rejected.
+        fetchVisibleUsers(profile),
+      ]);
+      setIssues(
+        issueSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Issue))
+          .sort((a, b) => b.createdAt - a.createdAt)
+      );
+      setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
+      setUsers(visibleUsers);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load issues");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   async function report() {
     if (!profile) return;
@@ -112,6 +128,10 @@ export default function IssuesPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+
+  if (loadError) {
+    return <EmptyState icon={AlertTriangle} title="Couldn't load issues" description={loadError} />;
+  }
 
   return (
     <div className="space-y-5">

@@ -3,13 +3,21 @@
 import { useEffect, useState } from "react";
 import {
   collection,
-  getCountFromServer,
   getDocs,
+  limit,
+  orderBy,
   query,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { ActivityLog, ApplicationStatus, Department, Task } from "@/lib/types";
+import {
+  ActivityLog,
+  Application,
+  ApplicationStatus,
+  Department,
+  Task,
+  UserProfile,
+} from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
@@ -55,23 +63,30 @@ function RecruitmentReport() {
 
   useEffect(() => {
     (async () => {
-      const appsRef = collection(db, "applications");
-      const statuses = Object.keys(APPLICATION_STATUS_LABELS) as ApplicationStatus[];
-      const [totalCount, ...statusCounts] = await Promise.all([
-        getCountFromServer(appsRef),
-        ...statuses.map((s) => getCountFromServer(query(appsRef, where("status", "==", s)))),
+      // Two reads instead of one-per-status plus one-per-department; the
+      // whole breakdown is a grouping of the same application list.
+      const [appsSnap, deptSnap] = await Promise.all([
+        getDocs(collection(db, "applications")),
+        getDocs(collection(db, "departments")),
       ]);
-      setTotal(totalCount.data().count);
+
+      const apps = appsSnap.docs.map((d) => d.data() as Application);
+      const statuses = Object.keys(APPLICATION_STATUS_LABELS) as ApplicationStatus[];
+
+      setTotal(apps.length);
       const statusMap: Record<string, number> = {};
-      statuses.forEach((s, i) => (statusMap[s] = statusCounts[i].data().count));
+      statuses.forEach((s) => {
+        statusMap[s] = apps.filter((a) => a.status === s).length;
+      });
       setByStatus(statusMap);
 
-      const deptSnap = await getDocs(collection(db, "departments"));
       const depts = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
-      const deptCounts = await Promise.all(
-        depts.map((d) => getCountFromServer(query(appsRef, where("departmentPreference", "==", d.name))))
+      setByDept(
+        depts.map((d) => ({
+          name: d.name,
+          count: apps.filter((a) => a.departmentPreference === d.name).length,
+        }))
       );
-      setByDept(depts.map((d, i) => ({ name: d.name, count: deptCounts[i].data().count })));
       setLoading(false);
     })();
   }, []);
@@ -114,21 +129,31 @@ function DepartmentReport() {
 
   useEffect(() => {
     (async () => {
-      const deptSnap = await getDocs(collection(db, "departments"));
+      // One read per collection, then group in memory — previously this
+      // issued 2 queries per department after the department list resolved.
+      const [deptSnap, userSnap, taskSnap] = await Promise.all([
+        getDocs(collection(db, "departments")),
+        getDocs(query(collection(db, "users"), where("role", "==", "volunteer"))),
+        getDocs(collection(db, "tasks")),
+      ]);
+
       const depts = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
-      const results = await Promise.all(
-        depts.map(async (department) => {
-          const [volSnap, taskSnap] = await Promise.all([
-            getCountFromServer(query(collection(db, "users"), where("departmentId", "==", department.id), where("role", "==", "volunteer"))),
-            getDocs(query(collection(db, "tasks"), where("departmentId", "==", department.id))),
-          ]);
-          const tasks = taskSnap.docs.map((d) => d.data() as Task);
-          const completed = tasks.filter((t) => t.status === "COMPLETED").length;
-          const overdue = tasks.filter((t) => t.deadline && t.deadline < Date.now() && t.status !== "COMPLETED").length;
-          return { department, volunteers: volSnap.data().count, tasks: tasks.length, completed, overdue };
+      const volunteers = userSnap.docs.map((d) => d.data() as UserProfile);
+      const allTasks = taskSnap.docs.map((d) => d.data() as Task);
+      const now = Date.now();
+
+      setRows(
+        depts.map((department) => {
+          const tasks = allTasks.filter((t) => t.departmentId === department.id);
+          return {
+            department,
+            volunteers: volunteers.filter((v) => v.departmentId === department.id).length,
+            tasks: tasks.length,
+            completed: tasks.filter((t) => t.status === "COMPLETED").length,
+            overdue: tasks.filter((t) => t.deadline && t.deadline < now && t.status !== "COMPLETED").length,
+          };
         })
       );
-      setRows(results);
       setLoading(false);
     })();
   }, []);
@@ -180,11 +205,13 @@ function ActivityReport() {
 
   useEffect(() => {
     (async () => {
+      // Bounded + server-sorted. This collection grows on every login and
+      // every action, so reading it whole would get slower without limit.
       const [logSnap, deptSnap] = await Promise.all([
-        getDocs(collection(db, "activityLogs")),
+        getDocs(query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(200))),
         getDocs(collection(db, "departments")),
       ]);
-      setLogs(logSnap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityLog)).sort((a, b) => b.createdAt - a.createdAt));
+      setLogs(logSnap.docs.map((d) => ({ id: d.id, ...d.data() } as ActivityLog)));
       setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
       setLoading(false);
     })();

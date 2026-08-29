@@ -11,7 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import { ActivityLog, Department, Task } from "@/lib/types";
+import { ActivityLog, Application, Department, Task } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { formatDateTime } from "@/lib/utils";
@@ -62,29 +62,29 @@ export default function CommandCenterPage() {
   useEffect(() => {
     (async () => {
       const usersRef = collection(db, "users");
-      const appsRef = collection(db, "applications");
 
+      // Everything the dashboard needs in ONE parallel wave. Per-department
+      // recruitment numbers used to be 2 aggregate queries per department
+      // (24 extra round-trips for the 12 default departments) fired only
+      // after this batch resolved; they're now derived client-side from the
+      // single applications read below.
       const [
         coreCount,
         volCount,
         applicantCount,
-        pendingAppsCount,
-        pendingInterviewCount,
-        pendingApprovalCount,
         deptSnap,
         activitySnap,
         allTasksSnap,
+        allAppsSnap,
         openIssuesCount,
       ] = await Promise.all([
         getCountFromServer(query(usersRef, where("role", "in", ["admin", "core"]))),
         getCountFromServer(query(usersRef, where("role", "==", "volunteer"))),
         getCountFromServer(query(usersRef, where("role", "==", "applicant"))),
-        getCountFromServer(query(appsRef, where("status", "in", ["SUBMITTED", "UNDER_REVIEW"]))),
-        getCountFromServer(query(appsRef, where("status", "==", "INTERVIEW_SCHEDULED"))),
-        getCountFromServer(query(appsRef, where("status", "==", "CORE_REVIEW"))),
         getDocs(collection(db, "departments")),
         getDocs(query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(12))),
         getDocs(collection(db, "tasks")),
+        getDocs(collection(db, "applications")),
         getCountFromServer(
           query(collection(db, "issues"), where("status", "in", ["REPORTED", "ASSIGNED", "IN_PROGRESS"]))
         ),
@@ -92,33 +92,39 @@ export default function CommandCenterPage() {
 
       const allTasks = allTasksSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task));
       const activeTasks = allTasks.filter((t) => t.status !== "COMPLETED").length;
-      const overdueTasks = allTasks.filter((t) => t.deadline && t.deadline < Date.now() && t.status !== "COMPLETED").length;
+      const now = Date.now();
+      const overdueTasks = allTasks.filter(
+        (t) => t.deadline && t.deadline < now && t.status !== "COMPLETED"
+      ).length;
+
+      const allApps = allAppsSnap.docs.map((d) => d.data() as Application);
+      const countByStatus = (statuses: string[]) =>
+        allApps.filter((a) => statuses.includes(a.status)).length;
 
       setStats({
         coreTeam: coreCount.data().count,
         volunteers: volCount.data().count,
         applicants: applicantCount.data().count,
-        pendingApplications: pendingAppsCount.data().count,
-        pendingInterviews: pendingInterviewCount.data().count,
-        pendingApprovals: pendingApprovalCount.data().count,
+        pendingApplications: countByStatus(["SUBMITTED", "UNDER_REVIEW"]),
+        pendingInterviews: countByStatus(["INTERVIEW_SCHEDULED"]),
+        pendingApprovals: countByStatus(["CORE_REVIEW"]),
         activeTasks,
         overdueTasks,
         openIssues: openIssuesCount.data().count,
       });
 
       const departments = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
-      const health = await Promise.all(
-        departments.map(async (department) => {
-          const [totalSnap, approvedSnap] = await Promise.all([
-            getCountFromServer(query(appsRef, where("departmentPreference", "==", department.name))),
-            getCountFromServer(
-              query(appsRef, where("departmentPreference", "==", department.name), where("status", "==", "APPROVED"))
-            ),
-          ]);
-          return { department, total: totalSnap.data().count, approved: approvedSnap.data().count };
+
+      setDeptHealth(
+        departments.map((department) => {
+          const deptApps = allApps.filter((a) => a.departmentPreference === department.name);
+          return {
+            department,
+            total: deptApps.length,
+            approved: deptApps.filter((a) => a.status === "APPROVED").length,
+          };
         })
       );
-      setDeptHealth(health);
 
       setDeptTaskHealth(
         departments.map((department) => {

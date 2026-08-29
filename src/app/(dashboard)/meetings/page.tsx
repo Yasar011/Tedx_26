@@ -7,8 +7,11 @@ import {
   doc,
   getDoc,
   getDocs,
+  query,
   updateDoc,
+  where,
 } from "firebase/firestore";
+import { fetchVisibleUsers } from "@/lib/directory";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ActionItem, Meeting, UserProfile } from "@/lib/types";
@@ -29,6 +32,7 @@ export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -45,18 +49,38 @@ export default function MeetingsPage() {
   });
 
   async function load() {
-    const [meetingSnap, userSnap] = await Promise.all([
-      getDocs(collection(db, "meetings")),
-      getDocs(collection(db, "users")),
-    ]);
-    setMeetings(meetingSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Meeting)).sort((a, b) => b.createdAt - a.createdAt));
-    setUsers(userSnap.docs.map((d) => d.data() as UserProfile));
-    setLoading(false);
+    if (!profile) return;
+    try {
+      // Rules let Admin/Core/Department leads see every meeting, but a
+      // volunteer may only read meetings they're an attendee of — querying
+      // the whole collection as one would fail the entire query.
+      const canSeeAllMeetings =
+        profile.role === "admin" || profile.role === "core" || isDeptLead(profile);
+
+      const [meetingSnap, visibleUsers] = await Promise.all([
+        canSeeAllMeetings
+          ? getDocs(collection(db, "meetings"))
+          : getDocs(query(collection(db, "meetings"), where("attendees", "array-contains", profile.uid))),
+        fetchVisibleUsers(profile),
+      ]);
+      setMeetings(
+        meetingSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Meeting))
+          .sort((a, b) => b.createdAt - a.createdAt)
+      );
+      setUsers(visibleUsers);
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load meetings");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile]);
 
   async function createMeeting() {
     if (!profile) return;
@@ -173,6 +197,16 @@ export default function MeetingsPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={CalendarDays}
+        title="Couldn't load meetings"
+        description={loadError}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">

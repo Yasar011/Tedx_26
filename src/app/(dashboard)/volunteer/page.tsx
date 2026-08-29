@@ -32,13 +32,9 @@ export default function VolunteerPage() {
           getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId))),
           getDocs(query(collection(db, "tasks"), where("assignedTo", "==", profile.uid))),
           getDocs(query(collection(db, "announcements"), where("scope", "==", "org"))),
-          getDocs(
-            query(
-              collection(db, "announcements"),
-              where("scope", "==", "department"),
-              where("departmentId", "==", profile.departmentId)
-            )
-          ),
+          // Single-field: org announcements have a null departmentId, so this
+          // needs no composite index.
+          getDocs(query(collection(db, "announcements"), where("departmentId", "==", profile.departmentId))),
         ]);
         const team = teamSnap.docs.map((d) => d.data() as UserProfile);
         const foundHead = team.find((t) => t.role === "department_head") ?? null;

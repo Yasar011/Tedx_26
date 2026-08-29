@@ -66,14 +66,16 @@ export default function EventDayPage() {
 
   useEffect(() => {
     (async () => {
+      // Single-field query, status filtered in memory — avoids needing a
+      // priority+status composite index.
       const snap = await getDocs(
-        query(
-          collection(db, "issues"),
-          where("priority", "==", "CRITICAL"),
-          where("status", "in", ["REPORTED", "ASSIGNED", "IN_PROGRESS"])
-        )
+        query(collection(db, "issues"), where("priority", "==", "CRITICAL"))
       );
-      setCriticalIssues(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Issue)));
+      setCriticalIssues(
+        snap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Issue))
+          .filter((i) => i.status !== "RESOLVED")
+      );
     })();
   }, [state]);
 

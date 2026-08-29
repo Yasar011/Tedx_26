@@ -1,69 +1,15 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "departments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "active", "order": "ASCENDING" },
-        { "fieldPath": "applicationsOpen", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "departmentId", "order": "ASCENDING" },
-        { "fieldPath": "role", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "applications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "departmentPreference", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "tasks",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "departmentId", "order": "ASCENDING" },
-        { "fieldPath": "assignedTo", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "announcements",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "scope", "order": "ASCENDING" },
-        { "fieldPath": "departmentId", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "taskComments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "taskId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "notifications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "userId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "issues",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "priority", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    }
+  "_comment": [
+    "No composite indexes are required. Every query in the app filters on a",
+    "single field (or a single-field 'in'), and narrows further in memory,",
+    "which Firestore serves from the automatically-created single-field",
+    "indexes. This is deliberate: it means the app works as soon as the",
+    "security rules are published, with no separate index deployment step",
+    "and no runtime 'query requires an index' failures.",
+    "If a future query adds a second where() or an orderBy() on a different",
+    "field than the where(), add its composite index here and deploy with:",
+    "  firebase deploy --only firestore:indexes"
   ],
+  "indexes": [],
   "fieldOverrides": []
 }

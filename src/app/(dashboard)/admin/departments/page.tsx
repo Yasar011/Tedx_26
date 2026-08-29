@@ -75,6 +75,25 @@ export default function AdminDepartmentsPage() {
 
   async function save() {
     if (!profile) return;
+    // Applications record their department by NAME, and TEDx IDs are built
+    // from the code, so duplicates of either would misroute applicants
+    // between departments and can generate IDs under the wrong code.
+    const name = form.name.trim().toLowerCase();
+    const code = form.code.trim().toUpperCase();
+    const clash = departments.find(
+      (d) =>
+        d.id !== editing?.id &&
+        (d.name.trim().toLowerCase() === name || d.code.trim().toUpperCase() === code)
+    );
+    if (clash) {
+      toast.error(
+        clash.name.trim().toLowerCase() === name
+          ? `A department named "${clash.name}" already exists`
+          : `Code "${code}" is already used by ${clash.name}`
+      );
+      return;
+    }
+
     setSaving(true);
     try {
       if (editing) {
@@ -172,6 +191,16 @@ export default function AdminDepartmentsPage() {
 
   if (loading) return <FullPageSpinner />;
 
+  const nameCounts = departments.reduce<Record<string, number>>((acc, d) => {
+    const key = d.name.trim().toLowerCase();
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const duplicateNames = departments
+    .filter((d) => nameCounts[d.name.trim().toLowerCase()] > 1)
+    .map((d) => d.name)
+    .filter((n, i, arr) => arr.indexOf(n) === i);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -190,6 +219,19 @@ export default function AdminDepartmentsPage() {
           </Button>
         </div>
       </div>
+
+      {duplicateNames.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="py-4 text-sm text-amber-800">
+            <p className="font-medium">Duplicate department names found: {duplicateNames.join(", ")}</p>
+            <p className="mt-1 text-amber-700">
+              Applications store the department by name, so duplicates make both departments
+              share applicants and can generate TEDx IDs under the wrong code. Delete the extra
+              one below (the empty one, if in doubt).
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {departments.length === 0 ? (
         <EmptyState icon={Building2} title="No departments yet" description="Create your first department, or seed the default TEDxNIFT departments." />

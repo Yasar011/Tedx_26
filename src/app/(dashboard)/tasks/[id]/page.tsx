@@ -9,7 +9,6 @@ import {
   doc,
   getDoc,
   onSnapshot,
-  orderBy,
   query,
   updateDoc,
   where,
@@ -64,9 +63,17 @@ export default function TaskDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    // Sorted in memory rather than via orderBy(), which would pair with the
+    // where() to require a composite index.
     const unsub = onSnapshot(
-      query(collection(db, "taskComments"), where("taskId", "==", id), orderBy("createdAt", "asc")),
-      (snap) => setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() } as TaskComment)))
+      query(collection(db, "taskComments"), where("taskId", "==", id)),
+      (snap) =>
+        setComments(
+          snap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as TaskComment))
+            .sort((a, b) => a.createdAt - b.createdAt)
+        ),
+      () => setComments([])
     );
     return () => unsub();
   }, [id]);

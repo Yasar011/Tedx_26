@@ -46,10 +46,15 @@ export default function AnnouncementsPage() {
     const orgSnap = await getDocs(query(collection(db, "announcements"), where("scope", "==", "org")));
     let deptAnns: Announcement[] = [];
     if (profile.departmentId) {
+      // Single-field query — org announcements carry a null departmentId,
+      // so filtering by department already excludes them without needing a
+      // composite (scope + departmentId) index.
       const deptSnap = await getDocs(
-        query(collection(db, "announcements"), where("scope", "==", "department"), where("departmentId", "==", profile.departmentId))
+        query(collection(db, "announcements"), where("departmentId", "==", profile.departmentId))
       );
-      deptAnns = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));
+      deptAnns = deptSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() } as Announcement))
+        .filter((a) => a.scope === "department");
     } else if (profile.role === "admin" || profile.role === "core") {
       const allDeptSnap = await getDocs(query(collection(db, "announcements"), where("scope", "==", "department")));
       deptAnns = allDeptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));

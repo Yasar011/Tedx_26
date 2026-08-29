@@ -75,20 +75,22 @@ export default function TasksPage() {
     const deptSnap = await getDoc(doc(db, "departments", profile.departmentId));
     if (deptSnap.exists()) setDepartment({ id: deptSnap.id, ...deptSnap.data() } as Department);
 
-    const taskQuery = isDeptLead(profile)
-      ? query(collection(db, "tasks"), where("departmentId", "==", profile.departmentId))
-      : query(
-          collection(db, "tasks"),
-          where("departmentId", "==", profile.departmentId),
-          where("assignedTo", "==", profile.uid)
-        );
-
+    // Both queries filter on departmentId alone and narrow further in
+    // memory. Adding a second where() would require composite indexes
+    // (departmentId+assignedTo, departmentId+role) that aren't guaranteed
+    // to be deployed, and the per-department volumes here are small.
     const [taskSnap, teamSnap] = await Promise.all([
-      getDocs(taskQuery),
-      getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId), where("role", "==", "volunteer"))),
+      getDocs(query(collection(db, "tasks"), where("departmentId", "==", profile.departmentId))),
+      getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId))),
     ]);
-    setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)).sort((a, b) => b.createdAt - a.createdAt));
-    setVolunteers(teamSnap.docs.map((d) => d.data() as UserProfile));
+
+    const deptTasks = taskSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() } as Task))
+      .sort((a, b) => b.createdAt - a.createdAt);
+
+    // Volunteers only see their own assignments; department leads see all.
+    setTasks(isDeptLead(profile) ? deptTasks : deptTasks.filter((t) => t.assignedTo === profile.uid));
+    setVolunteers(teamSnap.docs.map((d) => d.data() as UserProfile).filter((u) => u.role === "volunteer"));
     setLoading(false);
   }
 

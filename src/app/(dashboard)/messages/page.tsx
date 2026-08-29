@@ -23,6 +23,7 @@ import { formatDateTime } from "@/lib/utils";
 import { notify } from "@/lib/notifications";
 import { toast } from "sonner";
 import { Mail, Plus } from "lucide-react";
+import { fetchVisibleUsers } from "@/lib/directory";
 
 type Tab = "inbox" | "sent";
 
@@ -33,41 +34,36 @@ export default function MessagesPage() {
   const [sent, setSent] = useState<DirectMessage[]>([]);
   const [recipients, setRecipients] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ recipientId: "", subject: "", body: "" });
 
   async function load() {
     if (!profile) return;
-    const [inboxSnap, sentSnap] = await Promise.all([
-      getDocs(query(collection(db, "messages"), where("recipientId", "==", profile.uid))),
-      getDocs(query(collection(db, "messages"), where("senderId", "==", profile.uid))),
-    ]);
-    setInbox(inboxSnap.docs.map((d) => ({ id: d.id, ...d.data() } as DirectMessage)).sort((a, b) => b.createdAt - a.createdAt));
-    setSent(sentSnap.docs.map((d) => ({ id: d.id, ...d.data() } as DirectMessage)).sort((a, b) => b.createdAt - a.createdAt));
-
-    let recipientList: UserProfile[] = [];
-    if (profile.role === "admin" || profile.role === "core") {
-      const allSnap = await getDocs(collection(db, "users"));
-      recipientList = allSnap.docs.map((d) => d.data() as UserProfile);
-    } else {
-      const [deptSnap, leadershipSnap] = await Promise.all([
-        profile.departmentId
-          ? getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId)))
-          : Promise.resolve(null),
-        getDocs(query(collection(db, "users"), where("role", "in", ["admin", "core"]))),
+    try {
+      const [inboxSnap, sentSnap, recipientList] = await Promise.all([
+        getDocs(query(collection(db, "messages"), where("recipientId", "==", profile.uid))),
+        getDocs(query(collection(db, "messages"), where("senderId", "==", profile.uid))),
+        fetchVisibleUsers(profile),
       ]);
-      const deptUsers = deptSnap ? deptSnap.docs.map((d) => d.data() as UserProfile) : [];
-      const leaders = leadershipSnap.docs.map((d) => d.data() as UserProfile);
-      const seen = new Set<string>();
-      recipientList = [...deptUsers, ...leaders].filter((u) => {
-        if (seen.has(u.uid)) return false;
-        seen.add(u.uid);
-        return true;
-      });
+      setInbox(
+        inboxSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as DirectMessage))
+          .sort((a, b) => b.createdAt - a.createdAt)
+      );
+      setSent(
+        sentSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as DirectMessage))
+          .sort((a, b) => b.createdAt - a.createdAt)
+      );
+      setRecipients(recipientList.filter((u) => u.uid !== profile.uid));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load messages");
+    } finally {
+      setLoading(false);
     }
-    setRecipients(recipientList.filter((u) => u.uid !== profile.uid));
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -115,6 +111,10 @@ export default function MessagesPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+
+  if (loadError) {
+    return <EmptyState icon={Mail} title="Couldn't load messages" description={loadError} />;
+  }
 
   const list = tab === "inbox" ? inbox : sent;
 

@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   collection,
   doc,
-  limit,
   onSnapshot,
-  orderBy,
   query,
   updateDoc,
   where,
@@ -27,16 +25,21 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!profile) return;
+    // Deliberately a single-field query: combining where() + orderBy() on a
+    // different field would require a composite index, and this component
+    // mounts on every dashboard page — so it must not depend on one being
+    // deployed. A user's own notifications are few; sort and cap in memory.
     const unsub = onSnapshot(
-      query(
-        collection(db, "notifications"),
-        where("userId", "==", profile.uid),
-        orderBy("createdAt", "desc"),
-        limit(20)
-      ),
+      query(collection(db, "notifications"), where("userId", "==", profile.uid)),
       (snap) => {
-        setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Notification)));
-      }
+        setItems(
+          snap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as Notification))
+            .sort((a, b) => b.createdAt - a.createdAt)
+            .slice(0, 20)
+        );
+      },
+      () => setItems([])
     );
     return () => unsub();
   }, [profile]);

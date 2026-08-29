@@ -54,16 +54,17 @@ export default function ApplyPage() {
     (async () => {
       try {
         const [deptSnap, settingsSnap] = await Promise.all([
-          getDocs(
-            query(
-              collection(db, "departments"),
-              where("active", "==", true),
-              where("applicationsOpen", "==", true)
-            )
-          ),
+          // Single-field query + in-memory filter: two where() clauses would
+          // need a composite index, and this is the public entry point that
+          // must work without any index deployment.
+          getDocs(query(collection(db, "departments"), where("active", "==", true))),
           getDoc(doc(db, "settings", "event")),
         ]);
-        setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
+        setDepartments(
+          deptSnap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as Department))
+            .filter((d) => d.applicationsOpen !== false)
+        );
         setSettings(settingsSnap.exists() ? (settingsSnap.data() as EventSettings) : null);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "Could not load the application form");

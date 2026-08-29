@@ -40,38 +40,52 @@ export default function ApprovalCenterPage() {
   const [comments, setComments] = useState<Record<string, string>>({});
   const [pendingFiles, setPendingFiles] = useState(0);
   const [pendingTasks, setPendingTasks] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
-    const [appSnap, deptSnap, pendingFilesCount, pendingTasksCount] = await Promise.all([
-      getDocs(query(collection(db, "applications"), where("status", "==", "CORE_REVIEW"))),
-      getDocs(collection(db, "departments")),
-      getCountFromServer(query(collection(db, "files"), where("approvalStatus", "==", "PENDING"))),
-      getCountFromServer(query(collection(db, "tasks"), where("status", "==", "SUBMITTED_FOR_REVIEW"))),
-    ]);
-    setPendingFiles(pendingFilesCount.data().count);
-    setPendingTasks(pendingTasksCount.data().count);
-    const depts = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
-    setDepartments(depts);
+    try {
+      // Interviews are fetched once and joined in memory. Previously this
+      // ran a separate query per pending application, in a second wave that
+      // only started after the batch below resolved.
+      const [appSnap, deptSnap, interviewSnap, pendingFilesCount, pendingTasksCount] =
+        await Promise.all([
+          getDocs(query(collection(db, "applications"), where("status", "==", "CORE_REVIEW"))),
+          getDocs(collection(db, "departments")),
+          getDocs(collection(db, "interviews")),
+          getCountFromServer(query(collection(db, "files"), where("approvalStatus", "==", "PENDING"))),
+          getCountFromServer(query(collection(db, "tasks"), where("status", "==", "SUBMITTED_FOR_REVIEW"))),
+        ]);
 
-    const apps = appSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Application));
-    const rowsData: Row[] = await Promise.all(
-      apps.map(async (application) => {
-        const ivSnap = await getDocs(
-          query(collection(db, "interviews"), where("applicationId", "==", application.id))
-        );
-        const interview = ivSnap.empty
-          ? null
-          : ({ id: ivSnap.docs[0].id, ...ivSnap.docs[0].data() } as Interview);
-        return { application, interview };
-      })
-    );
-    setRows(rowsData.sort((a, b) => b.application.updatedAt - a.application.updatedAt));
-    setLoading(false);
+      setPendingFiles(pendingFilesCount.data().count);
+      setPendingTasks(pendingTasksCount.data().count);
+      setDepartments(deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department)));
+
+      const interviewByAppId = new Map<string, Interview>();
+      interviewSnap.docs.forEach((d) => {
+        const interview = { id: d.id, ...d.data() } as Interview;
+        // Keep the most recent interview if an applicant somehow has more.
+        const existing = interviewByAppId.get(interview.applicationId);
+        if (!existing || (interview.createdAt ?? 0) > (existing.createdAt ?? 0)) {
+          interviewByAppId.set(interview.applicationId, interview);
+        }
+      });
+
+      const rowsData: Row[] = appSnap.docs.map((d) => {
+        const application = { id: d.id, ...d.data() } as Application;
+        return { application, interview: interviewByAppId.get(application.id) ?? null };
+      });
+
+      setRows(rowsData.sort((a, b) => b.application.updatedAt - a.application.updatedAt));
+      setLoadError(null);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Could not load approvals");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     load();
-     
   }, []);
 
   async function decide(row: Row, decision: "APPROVED" | "REJECTED" | "WAITLISTED" | "SENT_BACK") {
@@ -144,6 +158,10 @@ export default function ApprovalCenterPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+
+  if (loadError) {
+    return <EmptyState icon={CheckSquare} title="Couldn't load approvals" description={loadError} />;
+  }
 
   return (
     <div className="space-y-5">
