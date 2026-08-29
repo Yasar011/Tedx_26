@@ -9,12 +9,15 @@ import {
   useState,
 } from "react";
 import { onAuthStateChanged, signOut as fbSignOut, User } from "firebase/auth";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { UserProfile } from "@/lib/types";
 import { FOUNDING_ADMIN_UID } from "@/lib/constants";
 
 const PROFILE_LOAD_TIMEOUT_MS = 8000;
+/** Grace period before self-healing a missing profile, so a sign-up that is
+ *  mid-flight can write its own document first. */
+const PROFILE_HEAL_DELAY_MS = 2500;
 
 interface AuthContextValue {
   firebaseUser: User | null;
@@ -104,21 +107,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         healAttemptedRef.current = true;
-        setDoc(doc(db, "users", firebaseUser.uid), {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email ?? "",
-          name: firebaseUser.displayName || firebaseUser.email?.split("@")[0] || "Unnamed",
-          role: "unassigned",
-          departmentId: null,
-          tedxId: null,
-          status: "active",
-          createdAt: Date.now(),
-        }).catch((err) => {
-          setProfileLoading(false);
-          setProfileError(
-            `This account has no profile record, and creating one was rejected: ${err.message}`
-          );
-        });
+
+        // A sign-up in progress writes this same document a moment later.
+        // Racing it would make whichever write lands second an *update*,
+        // which self-update rules rightly reject — so wait, re-check, and
+        // only step in if nothing arrived. The snapshot listener delivers
+        // the sign-up's own write automatically if it wins.
+        window.setTimeout(async () => {
+          try {
+            const fresh = await getDoc(doc(db, "users", firebaseUser.uid));
+            if (fresh.exists()) return;
+            await setDoc(doc(db, "users", firebaseUser.uid), {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email ?? "",
+              name:
+                auth.currentUser?.displayName ||
+                firebaseUser.displayName ||
+                firebaseUser.email?.split("@")[0] ||
+                "Unnamed",
+              role: "unassigned",
+              departmentId: null,
+              tedxId: null,
+              status: "active",
+              createdAt: Date.now(),
+            });
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            setProfileLoading(false);
+            setProfileError(
+              `This account has no profile record, and creating one was rejected: ${message}`
+            );
+          }
+        }, PROFILE_HEAL_DELAY_MS);
         // On success the snapshot listener re-fires with the new document.
       },
       (error) => {

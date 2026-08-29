@@ -84,6 +84,14 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid == userId &&
         onlyFieldsChanged(['name']);
 
+      // Submitting an application moves the account from 'unassigned' to
+      // 'applicant'. This exact transition only — never an elevation, and
+      // never from any other starting role.
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        onlyFieldsChanged(['role']) &&
+        resource.data.role == 'unassigned' &&
+        request.resource.data.role == 'applicant';
+
       // Admin/Core manage roles, departments, TEDx IDs, and status during approvals.
       allow update: if isCore();
 

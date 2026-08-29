@@ -9,6 +9,7 @@ import { Department, Task, UserProfile } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Select } from "@/components/ui/Input";
 import { Building2 } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { computeDepartmentHealth } from "@/lib/departmentHealth";
@@ -19,27 +20,46 @@ export default function DepartmentPage() {
   const [team, setTeam] = useState<UserProfile[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  // Admin and Core oversee the whole organisation, so they can switch
+  // between departments rather than being pinned to their own.
+  const canBrowseAll = profile?.role === "admin" || profile?.role === "core";
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const viewingId = selectedId ?? profile?.departmentId ?? null;
+
+  useEffect(() => {
+    if (!canBrowseAll) return;
+    (async () => {
+      const snap = await getDocs(collection(db, "departments"));
+      const depts = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
+      setAllDepartments(depts);
+      // Admins with no department of their own still get a view.
+      setSelectedId((cur) => cur ?? profile?.departmentId ?? depts[0]?.id ?? null);
+    })();
+  }, [canBrowseAll, profile?.departmentId]);
 
   useEffect(() => {
     if (!profile) return;
     (async () => {
-      if (!profile.departmentId) {
+      if (!viewingId) {
         setLoading(false);
         return;
       }
-      const deptSnap = await getDoc(doc(db, "departments", profile.departmentId));
+      setLoading(true);
+      const deptSnap = await getDoc(doc(db, "departments", viewingId));
       if (deptSnap.exists()) {
         setDepartment({ id: deptSnap.id, ...deptSnap.data() } as Department);
       }
       const [teamSnap, taskSnap] = await Promise.all([
-        getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId))),
-        getDocs(query(collection(db, "tasks"), where("departmentId", "==", profile.departmentId))),
+        getDocs(query(collection(db, "users"), where("departmentId", "==", viewingId))),
+        getDocs(query(collection(db, "tasks"), where("departmentId", "==", viewingId))),
       ]);
       setTeam(teamSnap.docs.map((d) => d.data() as UserProfile));
       setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)));
       setLoading(false);
     })();
-  }, [profile]);
+  }, [profile, viewingId]);
 
   if (loading) return <FullPageSpinner />;
 
@@ -47,8 +67,12 @@ export default function DepartmentPage() {
     return (
       <EmptyState
         icon={Building2}
-        title="No department assigned"
-        description="You haven't been assigned to a department yet. Contact an Admin."
+        title={canBrowseAll ? "No departments yet" : "No department assigned"}
+        description={
+          canBrowseAll
+            ? "Create a department from Admin → Departments to see its workspace here."
+            : "You haven't been assigned to a department yet. Contact an Admin."
+        }
       />
     );
   }
@@ -66,14 +90,33 @@ export default function DepartmentPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">{department.name}</h1>
-          <p className="text-sm text-neutral-500">Department code: {department.code}</p>
+          <p className="text-sm text-neutral-500">
+            Department code: {department.code}
+            {profile?.departmentId === department.id && canBrowseAll && " · your department"}
+          </p>
         </div>
-        <div className="text-right">
-          <p className="text-2xl">{health.emoji} {health.score}%</p>
-          <p className="text-xs text-neutral-500">{health.label}</p>
+        <div className="flex items-center gap-4">
+          {canBrowseAll && allDepartments.length > 1 && (
+            <Select
+              className="w-52"
+              value={viewingId ?? ""}
+              onChange={(e) => setSelectedId(e.target.value)}
+            >
+              {allDepartments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                  {d.id === profile?.departmentId ? " (mine)" : ""}
+                </option>
+              ))}
+            </Select>
+          )}
+          <div className="text-right">
+            <p className="text-2xl">{health.emoji} {health.score}%</p>
+            <p className="text-xs text-neutral-500">{health.label}</p>
+          </div>
         </div>
       </div>
 

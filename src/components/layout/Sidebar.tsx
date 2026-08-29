@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Logo } from "@/components/ui/Logo";
 import { Role } from "@/lib/types";
 import {
   LayoutDashboard,
@@ -121,14 +122,10 @@ export function Sidebar({
 
   return (
     <aside className="hidden w-60 shrink-0 overflow-y-auto border-r border-neutral-200 bg-white md:flex md:flex-col">
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-neutral-200 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#EB0028] text-sm font-bold text-white">
-          TX
-        </div>
-        <div>
-          <p className="text-sm font-semibold leading-tight">TEDxNIFT</p>
-          <p className="text-xs leading-tight text-neutral-500">Jodhpur</p>
-        </div>
+      <div className="flex h-16 shrink-0 items-center border-b border-neutral-200 px-4">
+        <Link href="/dashboard" className="flex items-center">
+          <Logo priority className="h-8 w-auto" />
+        </Link>
       </div>
       <nav className="flex-1 space-y-1 p-3">
         {items.map((item) => {

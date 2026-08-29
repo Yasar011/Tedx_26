@@ -7,6 +7,7 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Application, Department } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Input";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
@@ -24,13 +25,33 @@ export default function DepartmentApplicantsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const canBrowseAll = profile?.role === "admin" || profile?.role === "core";
+  const [allDepartments, setAllDepartments] = useState<Department[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
   async function load() {
-    if (!profile?.departmentId) {
+    if (!profile) return;
+
+    // Admin/Core can review any department's applicants; everyone else is
+    // scoped to their own.
+    if (canBrowseAll && allDepartments.length === 0) {
+      const snap = await getDocs(collection(db, "departments"));
+      const depts = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
+      setAllDepartments(depts);
+      if (!selectedId) {
+        setSelectedId(profile.departmentId ?? depts[0]?.id ?? null);
+        return; // re-runs with the selection applied
+      }
+    }
+
+    const targetId = canBrowseAll ? selectedId : profile.departmentId;
+    if (!targetId) {
       setLoading(false);
       return;
     }
-    const deptSnap = await getDoc(doc(db, "departments", profile.departmentId));
+
+    setLoading(true);
+    const deptSnap = await getDoc(doc(db, "departments", targetId));
     const dept = deptSnap.exists() ? ({ id: deptSnap.id, ...deptSnap.data() } as Department) : null;
     setDepartment(dept);
     if (dept) {
@@ -49,7 +70,7 @@ export default function DepartmentApplicantsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [profile]);
+  }, [profile, selectedId]);
 
   async function shortlist(app: Application) {
     await updateDoc(doc(db, "applications", app.id), {
@@ -96,11 +117,25 @@ export default function DepartmentApplicantsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">Applicants — {department.name}</h1>
           <p className="text-sm text-neutral-500">{applications.length} total applications</p>
         </div>
+        {canBrowseAll && allDepartments.length > 1 && (
+          <Select
+            className="w-52"
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {allDepartments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.id === profile?.departmentId ? " (mine)" : ""}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   signInWithEmailAndPassword,
@@ -14,17 +14,34 @@ import { auth, db } from "@/lib/firebase/client";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
+import { FullPageSpinner } from "@/components/ui/Spinner";
+import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
 import { logActivity } from "@/lib/activity";
 
+// useSearchParams() opts the tree into client-side rendering, so the form
+// lives in its own component behind a Suspense boundary.
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<FullPageSpinner />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Only ever an in-app path, so this can't be used to bounce someone
+  // off-site after login.
+  const nextRaw = searchParams.get("next");
+  const next = nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,7 +76,7 @@ export default function LoginPage() {
         });
         await sendEmailVerification(cred.user);
       }
-      router.replace("/dashboard");
+      router.replace(next ?? "/dashboard");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong";
       toast.error(message.replace("Firebase: ", ""));
@@ -73,12 +90,19 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardContent className="pt-8">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-[#EB0028] text-sm font-bold text-white">
-              TX
-            </div>
-            <h1 className="text-lg font-semibold text-neutral-900">Organizing Team Sign In</h1>
+            <Logo priority className="mx-auto mb-3 h-10 w-auto" />
+            <h1 className="text-lg font-semibold text-neutral-900">
+              {next === "/apply" ? "Sign in to apply" : "Organizing Team Sign In"}
+            </h1>
             <p className="mt-1 text-sm text-neutral-500">TEDxNIFT Jodhpur</p>
           </div>
+
+          {next === "/apply" && (
+            <p className="mb-5 rounded-lg bg-neutral-100 px-3 py-2 text-center text-xs text-neutral-600">
+              Create an account (or sign in) first — that&apos;s how you&apos;ll track your
+              application status afterwards.
+            </p>
+          )}
 
           <div className="mb-5 flex rounded-lg bg-neutral-100 p-1 text-sm font-medium">
             <button
@@ -125,18 +149,24 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {mode === "signup" && (
+          {mode === "signup" && next !== "/apply" && (
             <p className="mt-4 text-center text-xs text-neutral-500">
               New accounts start unassigned until an Admin grants a role.
             </p>
           )}
 
-          <p className="mt-6 text-center text-xs text-neutral-400">
-            Applying to volunteer instead?{" "}
-            <Link href="/apply" className="text-[#EB0028] hover:underline">
-              Go to the application form
-            </Link>
-          </p>
+          {next === "/apply" ? (
+            <p className="mt-6 text-center text-xs text-neutral-400">
+              You&apos;ll be taken straight to the application form.
+            </p>
+          ) : (
+            <p className="mt-6 text-center text-xs text-neutral-400">
+              Applying to volunteer instead?{" "}
+              <Link href="/apply" className="text-[#EB0028] hover:underline">
+                Go to the application form
+              </Link>
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

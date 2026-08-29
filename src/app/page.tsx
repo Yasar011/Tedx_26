@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { ConnectionErrorScreen } from "@/components/auth/ConnectionErrorScreen";
+import { LogoPlate } from "@/components/ui/Logo";
 
 export default function Home() {
   const { firebaseUser, profile, profileError, loading } = useAuth();
@@ -24,11 +25,9 @@ export default function Home() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-6 text-center text-white">
-      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-[#EB0028] text-xl font-bold">
-        TX
-      </div>
+      <LogoPlate className="mb-8" />
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-        TEDxNIFT Jodhpur — Organizing Platform
+        Organizing Platform
       </h1>
       <p className="mt-3 max-w-md text-sm text-neutral-400">
         The internal system for recruitment, departments, tasks, approvals, and event

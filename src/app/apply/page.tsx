@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } from "firebase/auth";
+import Link from "next/link";
 import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
 import {
   addDoc,
@@ -11,33 +11,34 @@ import {
   getDoc,
   getDocs,
   query,
-  setDoc,
+  updateDoc,
   where,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase/client";
+import { db } from "@/lib/firebase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Department, EventSettings } from "@/lib/types";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Input";
 import { Card, CardContent } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
 import { Ban } from "lucide-react";
 
 export default function ApplyPage() {
+  const { firebaseUser, profile, loading: authLoading } = useAuth();
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [settings, setSettings] = useState<EventSettings | null>(null);
+  const [alreadyApplied, setAlreadyApplied] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const router = useRouter();
 
   const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
     phone: "",
     programme: "",
     semester: "",
@@ -51,14 +52,18 @@ export default function ApplyPage() {
   });
 
   useEffect(() => {
+    if (!firebaseUser) return;
     (async () => {
       try {
-        const [deptSnap, settingsSnap] = await Promise.all([
+        const [deptSnap, settingsSnap, existingSnap] = await Promise.all([
           // Single-field query + in-memory filter: two where() clauses would
-          // need a composite index, and this is the public entry point that
-          // must work without any index deployment.
+          // need a composite index, and this must work without any index
+          // deployment.
           getDocs(query(collection(db, "departments"), where("active", "==", true))),
           getDoc(doc(db, "settings", "event")),
+          getDocs(
+            query(collection(db, "applications"), where("applicantUserId", "==", firebaseUser.uid))
+          ),
         ]);
         setDepartments(
           deptSnap.docs
@@ -66,13 +71,14 @@ export default function ApplyPage() {
             .filter((d) => d.applicationsOpen !== false)
         );
         setSettings(settingsSnap.exists() ? (settingsSnap.data() as EventSettings) : null);
+        setAlreadyApplied(!existingSnap.empty);
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : "Could not load the application form");
       } finally {
         setLoadingData(false);
       }
     })();
-  }, []);
+  }, [firebaseUser]);
 
   function update<K extends keyof typeof form>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -80,29 +86,17 @@ export default function ApplyPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!isNiftEmail(form.email)) {
+    if (!firebaseUser || !profile) return;
+    if (!isNiftEmail(profile.email)) {
       toast.error(`Only ${NIFT_EMAIL_DOMAIN} email addresses can apply`);
       return;
     }
     setSubmitting(true);
     try {
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      await updateProfile(cred.user, { displayName: form.name });
-      await sendEmailVerification(cred.user);
-      await setDoc(doc(db, "users", cred.user.uid), {
-        uid: cred.user.uid,
-        email: form.email,
-        name: form.name,
-        role: "applicant",
-        departmentId: null,
-        tedxId: null,
-        status: "active",
-        createdAt: Date.now(),
-      });
       const appRef = await addDoc(collection(db, "applications"), {
-        applicantUserId: cred.user.uid,
-        name: form.name,
-        email: form.email,
+        applicantUserId: firebaseUser.uid,
+        name: profile.name,
+        email: profile.email,
         phone: form.phone,
         programme: form.programme,
         semester: form.semester,
@@ -119,13 +113,20 @@ export default function ApplyPage() {
         reviewedBy: null,
         reviewedByName: null,
       });
+      // Move the account from "unassigned" to "applicant" so it lands on the
+      // application-status dashboard from now on. Security rules permit only
+      // this specific self-transition — never an elevation.
+      if (profile.role === "unassigned") {
+        await updateDoc(doc(db, "users", firebaseUser.uid), { role: "applicant" });
+      }
+
       await logActivity({
-        actorId: cred.user.uid,
-        actorName: form.name,
+        actorId: firebaseUser.uid,
+        actorName: profile.name,
         action: "APPLICATION_SUBMITTED",
         targetType: "application",
         targetId: appRef.id,
-        message: `${form.name} submitted an application for ${form.departmentPreference}`,
+        message: `${profile.name} submitted an application for ${form.departmentPreference}`,
       });
       setSubmitted(true);
     } catch (err) {
@@ -136,7 +137,50 @@ export default function ApplyPage() {
     }
   }
 
+  if (authLoading) return <FullPageSpinner />;
+
+  // Applying requires an account, so applicants can sign back in later to
+  // track their status. Rendered inline rather than redirected so there's
+  // no blank flash and no dependence on router timing.
+  if (!firebaseUser) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="py-10">
+            <Logo priority className="mx-auto mb-4 h-10 w-auto" />
+            <h1 className="text-lg font-semibold text-neutral-900">Sign in to apply</h1>
+            <p className="mt-2 text-sm text-neutral-500">
+              You need a {NIFT_EMAIL_DOMAIN} account before applying — that&apos;s how you&apos;ll
+              track your application status afterwards.
+            </p>
+            <Link href="/login?next=/apply">
+              <Button className="mt-6 w-full">Sign in or create an account</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (loadingData) return <FullPageSpinner />;
+
+  if (alreadyApplied) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="py-10">
+            <h1 className="text-lg font-semibold text-neutral-900">You&apos;ve already applied</h1>
+            <p className="mt-2 text-sm text-neutral-500">
+              Your application is on file. You can track its status from your dashboard.
+            </p>
+            <Button className="mt-6" onClick={() => router.replace("/dashboard")}>
+              View my application status
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loadError) {
     return (
@@ -169,7 +213,7 @@ export default function ApplyPage() {
           <CardContent className="py-10">
             <h1 className="text-lg font-semibold text-neutral-900">Application submitted!</h1>
             <p className="mt-2 text-sm text-neutral-500">
-              Thank you, {form.name}. Your application has been received. You can track its
+              Thank you, {profile?.name}. Your application has been received. You can track its
               status from your dashboard.
             </p>
             <Button className="mt-6" onClick={() => router.replace("/dashboard")}>
@@ -185,9 +229,7 @@ export default function ApplyPage() {
     <div className="min-h-screen bg-neutral-50 px-4 py-10">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-[#EB0028] text-sm font-bold text-white">
-            TX
-          </div>
+          <Logo priority className="mx-auto mb-3 h-12 w-auto" />
           <h1 className="text-2xl font-semibold text-neutral-900">
             {settings?.eventName ?? "TEDxNIFT Jodhpur"} Volunteer Application
           </h1>
@@ -199,34 +241,17 @@ export default function ApplyPage() {
         <Card>
           <CardContent className="py-8">
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Full Name" required>
-                  <Input required value={form.name} onChange={(e) => update("name", e.target.value)} />
-                </FormField>
-                <FormField label="Phone" required>
-                  <Input required value={form.phone} onChange={(e) => update("phone", e.target.value)} />
-                </FormField>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Applying as
+                </p>
+                <p className="font-medium text-neutral-900">{profile?.name}</p>
+                <p className="text-neutral-500">{profile?.email}</p>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Email" required hint={`Must end in ${NIFT_EMAIL_DOMAIN} — you'll use this to sign in and check status`}>
-                  <Input
-                    type="email"
-                    required
-                    value={form.email}
-                    onChange={(e) => update("email", e.target.value)}
-                  />
-                </FormField>
-                <FormField label="Create Password" required hint="Minimum 6 characters">
-                  <Input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={form.password}
-                    onChange={(e) => update("password", e.target.value)}
-                  />
-                </FormField>
-              </div>
+              <FormField label="Phone" required>
+                <Input required value={form.phone} onChange={(e) => update("phone", e.target.value)} />
+              </FormField>
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <FormField label="NIFT Programme" required>
