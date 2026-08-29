@@ -53,7 +53,12 @@ export default function DepartmentPage() {
     );
   }
 
-  const head = team.find((t) => t.role === "department_head");
+  // The department may be run by a dedicated Department Head, or by an
+  // Admin/Core member who also holds this department.
+  const head =
+    team.find((t) => t.role === "department_head") ??
+    team.find((t) => t.role === "admin" || t.role === "core");
+  const headLabel = head?.role === "department_head" ? "Department Head" : "Department Lead";
   const coHead = team.find((t) => t.isCoHead && t.uid !== head?.uid);
   const volunteers = team.filter((t) => t.role === "volunteer" && t.uid !== coHead?.uid);
   const health = computeDepartmentHealth(tasks);
@@ -140,7 +145,7 @@ export default function DepartmentPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-neutral-900">{head.name}</p>
-                    <p className="text-xs text-neutral-500">Department Head</p>
+                    <p className="text-xs text-neutral-500">{headLabel}</p>
                   </div>
                 </div>
               )}

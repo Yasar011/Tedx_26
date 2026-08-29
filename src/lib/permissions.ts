@@ -1,18 +1,32 @@
 import { UserProfile } from "./types";
 
 /**
- * A "department lead" is either the official Department Head or a
- * Co-Head — both get identical department-scoped permissions
- * (interviews, tasks, files, announcements). Co-Head is a flag on top
- * of a person's existing role, not a separate role, so it composes
- * cleanly with whatever base role they already hold.
+ * Someone who runs a department day-to-day, and so gets the
+ * department-scoped powers (interviews, tasks, files, announcements):
+ *
+ *  - the official Department Head;
+ *  - a Co-Head, which is a flag layered on top of an existing role rather
+ *    than a role of its own;
+ *  - an Admin or Core member who has also been assigned to a department —
+ *    e.g. the Admin who additionally runs Technical. Org-level roles are
+ *    not mutually exclusive with leading a department.
  */
 export function isDeptLead(profile: UserProfile | null): boolean {
   if (!profile) return false;
-  return profile.role === "department_head" || profile.isCoHead === true;
+  if (profile.role === "department_head") return true;
+  if (profile.isCoHead === true) return true;
+  return (profile.role === "admin" || profile.role === "core") && !!profile.departmentId;
 }
 
-export function isDeptLeadOf(profile: UserProfile | null, departmentId: string | null | undefined): boolean {
+export function isDeptLeadOf(
+  profile: UserProfile | null,
+  departmentId: string | null | undefined
+): boolean {
   if (!profile || !departmentId) return false;
   return isDeptLead(profile) && profile.departmentId === departmentId;
+}
+
+/** Whether this person also holds a department alongside an org-level role. */
+export function hasOwnDepartment(profile: UserProfile | null): boolean {
+  return !!profile?.departmentId;
 }

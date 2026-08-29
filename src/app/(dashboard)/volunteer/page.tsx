@@ -37,7 +37,13 @@ export default function VolunteerPage() {
           getDocs(query(collection(db, "announcements"), where("departmentId", "==", profile.departmentId))),
         ]);
         const team = teamSnap.docs.map((d) => d.data() as UserProfile);
-        const foundHead = team.find((t) => t.role === "department_head") ?? null;
+        // Falls back to an Admin/Core member holding this department, for
+        // departments run directly by org leadership rather than a
+        // dedicated Department Head.
+        const foundHead =
+          team.find((t) => t.role === "department_head") ??
+          team.find((t) => t.role === "admin" || t.role === "core") ??
+          null;
         setHead(foundHead);
         setCoHead(team.find((t) => t.isCoHead && t.uid !== foundHead?.uid) ?? null);
         setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)).sort((a, b) => b.createdAt - a.createdAt));

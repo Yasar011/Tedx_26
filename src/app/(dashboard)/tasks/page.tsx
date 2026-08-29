@@ -62,12 +62,38 @@ export default function TasksPage() {
 
   async function load() {
     if (!profile) return;
+
     if (profile.role === "admin" || profile.role === "core") {
-      const snap = await getDocs(collection(db, "tasks"));
-      setTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)).sort((a, b) => b.createdAt - a.createdAt));
+      // Org-wide view of every task. If this person ALSO holds a department
+      // (e.g. the Admin who runs Technical), load it and its volunteers as
+      // well so they can still create and assign tasks there.
+      const [taskSnap, deptSnap, teamSnap] = await Promise.all([
+        getDocs(collection(db, "tasks")),
+        profile.departmentId
+          ? getDoc(doc(db, "departments", profile.departmentId))
+          : Promise.resolve(null),
+        profile.departmentId
+          ? getDocs(query(collection(db, "users"), where("departmentId", "==", profile.departmentId)))
+          : Promise.resolve(null),
+      ]);
+
+      setTasks(
+        taskSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() } as Task))
+          .sort((a, b) => b.createdAt - a.createdAt)
+      );
+      if (deptSnap?.exists()) {
+        setDepartment({ id: deptSnap.id, ...deptSnap.data() } as Department);
+      }
+      if (teamSnap) {
+        setVolunteers(
+          teamSnap.docs.map((d) => d.data() as UserProfile).filter((u) => u.role === "volunteer")
+        );
+      }
       setLoading(false);
       return;
     }
+
     if (!profile.departmentId) {
       setLoading(false);
       return;

@@ -92,13 +92,27 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
 };
 
-export function Sidebar({ role, isCoHead }: { role: Role; isCoHead?: boolean }) {
+export function Sidebar({
+  role,
+  isCoHead,
+  hasDepartment,
+}: {
+  role: Role;
+  isCoHead?: boolean;
+  hasDepartment?: boolean;
+}) {
   const pathname = usePathname();
   let items = NAV_BY_ROLE[role] ?? [];
 
-  // Co-Heads get the same department-lead nav as a Department Head,
-  // layered on top of whatever their base role already shows.
-  if (isCoHead && role !== "department_head" && role !== "admin") {
+  // Anyone who also runs a department — a Co-Head, or an Admin/Core member
+  // assigned to one — gets the department-lead links layered on top of
+  // whatever their base role already shows. Note a plain volunteer also has
+  // a departmentId, so holding one is only qualifying for admin/core.
+  const alsoLeadsDepartment =
+    role !== "department_head" &&
+    (isCoHead === true || ((role === "admin" || role === "core") && hasDepartment === true));
+
+  if (alsoLeadsDepartment) {
     const leadOnly = NAV_BY_ROLE.department_head.filter(
       (leadItem) => !items.some((i) => i.href === leadItem.href)
     );

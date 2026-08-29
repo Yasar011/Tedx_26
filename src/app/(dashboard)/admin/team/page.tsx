@@ -156,7 +156,9 @@ export default function AdminTeamPage() {
                           value={u.departmentId ?? ""}
                           onChange={(e) => setDepartment(u, e.target.value)}
                           className="h-9 w-44"
-                          disabled={u.role !== "department_head" && u.role !== "volunteer"}
+                          // Admin and Core can hold a department too — an org
+                          // role doesn't preclude also running one.
+                          disabled={u.role === "applicant" || u.role === "unassigned"}
                         >
                           <option value="">—</option>
                           {departments.map((d) => (
