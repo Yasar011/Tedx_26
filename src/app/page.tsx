@@ -6,9 +6,10 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { ConnectionErrorScreen } from "@/components/auth/ConnectionErrorScreen";
 
 export default function Home() {
-  const { firebaseUser, profile, loading } = useAuth();
+  const { firebaseUser, profile, profileError, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -18,6 +19,7 @@ export default function Home() {
   }, [loading, firebaseUser, profile, router]);
 
   if (loading) return <FullPageSpinner />;
+  if (firebaseUser && profileError) return <ConnectionErrorScreen message={profileError} />;
   if (firebaseUser) return <FullPageSpinner />;
 
   return (
