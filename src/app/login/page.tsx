@@ -86,8 +86,17 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
-      <Card className="w-full max-w-sm">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-neutral-950 px-4 py-10">
+      {/* Same ambient glow as the landing page, so the two feel continuous. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="animate-glow absolute -top-32 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-[#EB0028]/25 blur-[120px]" />
+        <div
+          className="animate-glow absolute -bottom-40 right-0 h-[24rem] w-[24rem] rounded-full bg-[#EB0028]/15 blur-[110px]"
+          style={{ animationDelay: "-7s" }}
+        />
+      </div>
+
+      <Card className="animate-fade-up relative w-full max-w-sm border-neutral-200/10 bg-white shadow-2xl">
         <CardContent className="pt-8">
           <div className="mb-6 text-center">
             <Logo priority className="mx-auto mb-3 h-10 w-auto" />
@@ -104,18 +113,25 @@ function LoginForm() {
             </p>
           )}
 
-          <div className="mb-5 flex rounded-lg bg-neutral-100 p-1 text-sm font-medium">
+          {/* Sliding pill indicator rather than swapping backgrounds, so the
+              switch reads as one continuous motion. */}
+          <div className="relative mb-5 flex rounded-lg bg-neutral-100 p-1 text-sm font-medium">
+            <span
+              aria-hidden
+              className="absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-md bg-white shadow-sm transition-transform duration-300 ease-out"
+              style={{ transform: `translateX(${mode === "signin" ? "0%" : "100%"})` }}
+            />
             <button
               type="button"
               onClick={() => setMode("signin")}
-              className={`flex-1 rounded-md py-1.5 ${mode === "signin" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              className={`relative z-10 flex-1 rounded-md py-1.5 transition-colors ${mode === "signin" ? "text-neutral-900" : "text-neutral-500"}`}
             >
               Sign In
             </button>
             <button
               type="button"
               onClick={() => setMode("signup")}
-              className={`flex-1 rounded-md py-1.5 ${mode === "signup" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              className={`relative z-10 flex-1 rounded-md py-1.5 transition-colors ${mode === "signup" ? "text-neutral-900" : "text-neutral-500"}`}
             >
               Create Account
             </button>
@@ -123,9 +139,11 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
-              <FormField label="Full name" required>
-                <Input value={name} onChange={(e) => setName(e.target.value)} required />
-              </FormField>
+              <div className="animate-fade-up">
+                <FormField label="Full name" required>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} required />
+                </FormField>
+              </div>
             )}
             <FormField label="Email" required hint={mode === "signup" ? `Must end in ${NIFT_EMAIL_DOMAIN}` : undefined}>
               <Input
@@ -167,6 +185,12 @@ function LoginForm() {
               </Link>
             </p>
           )}
+
+          <p className="mt-3 text-center text-xs">
+            <Link href="/" className="text-neutral-400 transition-colors hover:text-neutral-600">
+              ← Back to home
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

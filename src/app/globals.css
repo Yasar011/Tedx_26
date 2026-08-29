@@ -3,6 +3,7 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --tedx-red: #eb0028;
 }
 
 @theme inline {
@@ -12,15 +13,103 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* ---------------------------------------------------------------
+   Landing-page motion.
+   Pure CSS so the public page stays fast on low-end phones — no
+   animation library in the bundle. Every effect is disabled under
+   prefers-reduced-motion.
+   --------------------------------------------------------------- */
+
+@keyframes tedx-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes tedx-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tedx-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(4%, -6%, 0) scale(1.18);
+    opacity: 0.85;
+  }
+}
+
+@keyframes tedx-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+/* Plays immediately on mount, used for above-the-fold content. */
+.animate-fade-up {
+  animation: tedx-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-fade-in {
+  animation: tedx-fade-in 0.9s ease both;
+}
+
+.animate-glow {
+  animation: tedx-glow-drift 14s ease-in-out infinite;
+}
+
+.animate-marquee {
+  animation: tedx-marquee 32s linear infinite;
+}
+
+/* Scroll-triggered reveal: hidden until <Reveal> adds .is-visible. */
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 28px, 0);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-in,
+  .animate-glow,
+  .animate-marquee {
+    animation: none !important;
+  }
+
+  .reveal,
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
