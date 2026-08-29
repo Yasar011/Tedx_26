@@ -12,6 +12,7 @@ import { onAuthStateChanged, signOut as fbSignOut, User } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import { UserProfile } from "@/lib/types";
+import { FOUNDING_ADMIN_UID } from "@/lib/constants";
 
 const PROFILE_LOAD_TIMEOUT_MS = 8000;
 
@@ -133,16 +134,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [firebaseUser]);
 
-  const value = useMemo(
-    () => ({
+  const value = useMemo(() => {
+    // The founding Admin is recognised even before anyone has been given
+    // the admin role in the database. Mirrored in firestore.rules, so this
+    // is not a client-side-only grant.
+    const effectiveProfile: UserProfile | null =
+      profile && firebaseUser?.uid === FOUNDING_ADMIN_UID && profile.role !== "admin"
+        ? { ...profile, role: "admin" }
+        : profile;
+
+    return {
       firebaseUser,
-      profile,
+      profile: effectiveProfile,
       loading: authLoading || (!!firebaseUser && profileLoading),
       profileError,
       signOut: () => fbSignOut(auth),
-    }),
-    [firebaseUser, profile, authLoading, profileLoading, profileError]
-  );
+    };
+  }, [firebaseUser, profile, authLoading, profileLoading, profileError]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

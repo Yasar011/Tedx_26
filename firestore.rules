@@ -15,12 +15,23 @@ service cloud.firestore {
       return isSignedIn() ? me().role : 'anonymous';
     }
 
+    // Bootstrap Admin. Nobody can grant themselves the admin role (by
+    // design), which leaves no way to create the first one. This UID is
+    // treated as Admin so the founding account can get in and assign
+    // everyone else from Admin > Team. Keep in sync with
+    // FOUNDING_ADMIN_UID in src/lib/constants.ts. Checked first so it
+    // short-circuits before the users/ lookup in myRole().
+    function isFoundingAdmin() {
+      return isSignedIn() && request.auth.uid == 'TC9hbFuw3HgnKnzEZUFU4ZKrpKA2';
+    }
+
     function isAdmin() {
-      return isSignedIn() && myRole() == 'admin';
+      return isFoundingAdmin() || (isSignedIn() && myRole() == 'admin');
     }
 
     function isCore() {
-      return isSignedIn() && (myRole() == 'admin' || myRole() == 'core');
+      return isFoundingAdmin() ||
+        (isSignedIn() && (myRole() == 'admin' || myRole() == 'core'));
     }
 
     // A "department lead" is the official Department Head or a Co-Head —
@@ -66,7 +77,8 @@ service cloud.firestore {
         request.resource.data.uid == userId &&
         request.resource.data.role in ['unassigned', 'applicant'] &&
         request.resource.data.tedxId == null &&
-        request.resource.data.email.lower().matches('.*@nift[.]ac[.]in$');
+        (isFoundingAdmin() ||
+          request.resource.data.email.lower().matches('.*@nift[.]ac[.]in$'));
 
       // Users may update their own non-sensitive fields only.
       allow update: if isSignedIn() && request.auth.uid == userId &&

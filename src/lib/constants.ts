@@ -7,6 +7,16 @@ import {
   TaskStatus,
 } from "./types";
 
+/**
+ * Bootstrap Admin. Security rules deliberately prevent anyone from making
+ * themselves an admin, which leaves a chicken-and-egg problem for the very
+ * first one. This UID is treated as an Admin both here and in
+ * firestore.rules (keep the two in sync). Every subsequent role is assigned
+ * in-app from Admin > Team — this is only for the founding account.
+ */
+export const FOUNDING_ADMIN_UID =
+  process.env.NEXT_PUBLIC_FOUNDING_ADMIN_UID || "TC9hbFuw3HgnKnzEZUFU4ZKrpKA2";
+
 export const DEFAULT_DEPARTMENTS = [
   { name: "PR & Outreach", code: "PR" },
   { name: "Sponsorship", code: "SP" },
