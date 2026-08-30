@@ -36,7 +36,6 @@ interface Stats {
   pendingApprovals: number;
   activeTasks: number;
   overdueTasks: number;
-  openIssues: number;
 }
 
 interface DeptHealth {
@@ -76,7 +75,6 @@ export default function CommandCenterPage() {
         activitySnap,
         allTasksSnap,
         allAppsSnap,
-        openIssuesCount,
       ] = await Promise.all([
         getCountFromServer(query(usersRef, where("role", "in", ["admin", "core"]))),
         getCountFromServer(query(usersRef, where("role", "==", "volunteer"))),
@@ -85,9 +83,6 @@ export default function CommandCenterPage() {
         getDocs(query(collection(db, "activityLogs"), orderBy("createdAt", "desc"), limit(12))),
         getDocs(collection(db, "tasks")),
         getDocs(collection(db, "applications")),
-        getCountFromServer(
-          query(collection(db, "issues"), where("status", "in", ["REPORTED", "ASSIGNED", "IN_PROGRESS"]))
-        ),
       ]);
 
       const allTasks = allTasksSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task));
@@ -110,7 +105,6 @@ export default function CommandCenterPage() {
         pendingApprovals: countByStatus(["CORE_REVIEW"]),
         activeTasks,
         overdueTasks,
-        openIssues: openIssuesCount.data().count,
       });
 
       const departments = deptSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
@@ -150,7 +144,6 @@ export default function CommandCenterPage() {
     { label: "Pending Core Approvals", value: stats.pendingApprovals, icon: CheckSquare },
     { label: "Active Tasks", value: stats.activeTasks, icon: ListTodo },
     { label: "Overdue Tasks", value: stats.overdueTasks, icon: AlertTriangle },
-    { label: "Open Issues", value: stats.openIssues, icon: AlertTriangle },
   ];
 
   return (
