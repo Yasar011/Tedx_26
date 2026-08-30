@@ -15,7 +15,7 @@ import {
  * in-app from Admin > Team — this is only for the founding account.
  */
 export const FOUNDING_ADMIN_UID =
-  process.env.NEXT_PUBLIC_FOUNDING_ADMIN_UID || "TC9hbFuw3HgnKnzEZUFU4ZKrpKA2";
+  process.env.NEXT_PUBLIC_FOUNDING_ADMIN_UID || "a8WrtFFMddUQ8mCCRV2znQfqDFI2";
 
 
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
