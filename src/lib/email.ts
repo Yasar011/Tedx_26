@@ -1,0 +1,115 @@
+import { auth } from "./firebase/client";
+import { formatDateTime } from "./utils";
+
+export interface SendResult {
+  ok: boolean;
+  remaining?: number;
+  error?: string;
+}
+
+/**
+ * Sends one notification email via the server relay.
+ *
+ * Never throws: an email failing must not roll back the decision that
+ * triggered it. A Head shortlisting someone should still be shortlisted
+ * even if the daily Gmail quota (100/day on a free account) has run out —
+ * the caller surfaces the returned error instead.
+ */
+export async function sendApplicantEmail(params: {
+  to: string;
+  subject: string;
+  heading: string;
+  message: string;
+  detail?: string;
+}): Promise<SendResult> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return { ok: false, error: "Not signed in" };
+
+    const res = await fetch("/api/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify(params),
+    });
+    return (await res.json()) as SendResult;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Send failed" };
+  }
+}
+
+/** Remaining sends for today, or null if the relay isn't configured. */
+export async function getEmailQuota(): Promise<number | null> {
+  try {
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) return null;
+    const res = await fetch("/api/email/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+      body: JSON.stringify({ action: "quota" }),
+    });
+    const data = await res.json();
+    return typeof data?.remaining === "number" ? data.remaining : null;
+  } catch {
+    return null;
+  }
+}
+
+const EVENT = "TEDxNIFT Jodhpur";
+
+export const applicantEmails = {
+  shortlisted(name: string, department: string) {
+    return {
+      subject: `You've been shortlisted — ${EVENT}`,
+      heading: `Good news, ${name.split(" ")[0]}!`,
+      message: `Your application to the ${department} team has been shortlisted. The next step is a short interview — we'll email you the date and time shortly.`,
+      detail: "You can track your status any time by signing in to the platform.",
+    };
+  },
+
+  interviewScheduled(name: string, department: string, whenMs: number, note?: string) {
+    return {
+      subject: `Your interview is scheduled — ${EVENT}`,
+      heading: `Interview scheduled, ${name.split(" ")[0]}`,
+      message: `Your interview for the ${department} team has been scheduled. Please be available a few minutes early.`,
+      detail: [`When: ${formatDateTime(whenMs)}`, note ? `Note: ${note}` : ""]
+        .filter(Boolean)
+        .join("\n"),
+    };
+  },
+
+  interviewUpdated(name: string, department: string, whenMs: number) {
+    return {
+      subject: `Your interview time has changed — ${EVENT}`,
+      heading: `Updated interview time, ${name.split(" ")[0]}`,
+      message: `The interview for your ${department} application has been rescheduled.`,
+      detail: `New time: ${formatDateTime(whenMs)}`,
+    };
+  },
+
+  approved(name: string, department: string, tedxId: string) {
+    return {
+      subject: `Welcome to the team — ${EVENT}`,
+      heading: `You're in, ${name.split(" ")[0]}!`,
+      message: `You've been selected to join the ${department} team for ${EVENT}. Sign in to see your dashboard, your department and your first tasks.`,
+      detail: `Your TEDx Member ID: ${tedxId}`,
+    };
+  },
+
+  rejected(name: string, department: string, reason?: string) {
+    return {
+      subject: `Update on your application — ${EVENT}`,
+      heading: `Thank you for applying, ${name.split(" ")[0]}`,
+      message: `We're sorry — your application to the ${department} team wasn't successful this time. We had a lot of strong applicants, and we'd genuinely encourage you to apply again for the next edition.`,
+      detail: reason ? `Feedback: ${reason}` : "",
+    };
+  },
+
+  waitlisted(name: string, department: string) {
+    return {
+      subject: `You're on the waitlist — ${EVENT}`,
+      heading: `You're on the waitlist, ${name.split(" ")[0]}`,
+      message: `Your application to the ${department} team has been placed on the waitlist. We'll be in touch if a place opens up.`,
+      detail: "",
+    };
+  },
+};

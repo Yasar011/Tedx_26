@@ -23,6 +23,7 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
+import { sendApplicantEmail, applicantEmails } from "@/lib/email";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -111,6 +112,24 @@ export default function InterviewDetailPage() {
         departmentId: profile.departmentId,
       });
       toast.success("Interview scheduled");
+
+      // The applicant is told the time by email as well as in-app, since
+      // they won't necessarily be signed in when it's set.
+      const mail = await sendApplicantEmail({
+        to: application.email,
+        ...applicantEmails.interviewScheduled(
+          application.name,
+          application.departmentPreference,
+          ts
+        ),
+      });
+      if (!mail.ok) {
+        toast.error(
+          mail.error === "quota_exhausted"
+            ? "Interview saved, but today's email limit is used up — tell them directly."
+            : `Interview saved, but the email didn't send: ${mail.error ?? "unknown"}`
+        );
+      }
       setInterview({ id: ref.id } as Interview);
       load();
     } finally {

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
+import { sendApplicantEmail, applicantEmails } from "@/lib/email";
 import { Users, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -89,7 +90,33 @@ export default function DepartmentApplicantsPage() {
       departmentId: profile!.departmentId,
     });
     toast.success(`${app.name} shortlisted`);
+
+    // Emailed after the status is committed: the applicant is shortlisted
+    // whether or not the daily send quota allows a mail right now.
+    await notifyApplicant(
+      app.email,
+      applicantEmails.shortlisted(app.name, app.departmentPreference)
+    );
     load();
+  }
+
+  /** Sends an applicant email and reports quota problems rather than hiding them. */
+  async function notifyApplicant(
+    to: string,
+    content: { subject: string; heading: string; message: string; detail?: string }
+  ) {
+    const result = await sendApplicantEmail({ to, ...content });
+    if (result.ok) {
+      if (typeof result.remaining === "number" && result.remaining <= 10) {
+        toast.warning(`Email sent — only ${result.remaining} left in today's quota`);
+      }
+      return;
+    }
+    if (result.error === "quota_exhausted") {
+      toast.error("Today's 100-email limit is used up — tell this applicant directly.");
+    } else {
+      toast.error(`Status saved, but the email didn't send: ${result.error ?? "unknown"}`);
+    }
   }
 
   async function moveToReview(app: Application) {

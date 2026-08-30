@@ -23,6 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { generateTedxId } from "@/lib/tedxId";
+import { sendApplicantEmail, applicantEmails, getEmailQuota } from "@/lib/email";
 import { toast } from "sonner";
 import { CheckSquare } from "lucide-react";
 
@@ -41,7 +42,14 @@ export default function ApprovalCenterPage() {
   const [pendingFiles, setPendingFiles] = useState(0);
   const [pendingTasks, setPendingTasks] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [quota, setQuota] = useState<number | null>(null);
   const isAdmin = profile?.role === "admin";
+
+  // Sending is capped per day by Gmail, so show what's left before someone
+  // works through a batch and silently runs out partway.
+  useEffect(() => {
+    getEmailQuota().then(setQuota);
+  }, []);
 
   async function load() {
     try {
@@ -89,6 +97,23 @@ export default function ApprovalCenterPage() {
     load();
   }, []);
 
+  /** Sends an applicant email; a quota failure must never hide the decision. */
+  async function notifyApplicant(
+    to: string,
+    content: { subject: string; heading: string; message: string; detail?: string }
+  ) {
+    const result = await sendApplicantEmail({ to, ...content });
+    if (result.ok) {
+      if (typeof result.remaining === "number") setQuota(result.remaining);
+      return;
+    }
+    toast.error(
+      result.error === "quota_exhausted"
+        ? "Decision saved, but today's email limit is used up — contact them directly."
+        : `Decision saved, but the email didn't send: ${result.error ?? "unknown"}`
+    );
+  }
+
   async function decide(row: Row, decision: "APPROVED" | "REJECTED" | "WAITLISTED" | "SENT_BACK") {
     if (!profile) return;
     setBusyId(row.application.id);
@@ -121,6 +146,10 @@ export default function ApprovalCenterPage() {
           departmentId: dept.id,
         });
         toast.success(`${row.application.name} approved — ${tedxId}`);
+        await notifyApplicant(
+          row.application.email,
+          applicantEmails.approved(row.application.name, dept.name, tedxId)
+        );
       } else {
         const statusMap = {
           REJECTED: "REJECTED",
@@ -140,6 +169,27 @@ export default function ApprovalCenterPage() {
           message: `${row.application.name} marked ${decision} by ${profile.name}${comment ? `: ${comment}` : ""}`,
         });
         toast.success(`${row.application.name} marked ${decision.toLowerCase()}`);
+
+        // "Sent back" is an internal step — the applicant sees no change,
+        // so emailing them about it would only confuse.
+        if (decision === "REJECTED") {
+          await notifyApplicant(
+            row.application.email,
+            applicantEmails.rejected(
+              row.application.name,
+              row.application.departmentPreference,
+              comment
+            )
+          );
+        } else if (decision === "WAITLISTED") {
+          await notifyApplicant(
+            row.application.email,
+            applicantEmails.waitlisted(
+              row.application.name,
+              row.application.departmentPreference
+            )
+          );
+        }
       }
       if (row.interview) {
         await updateDoc(doc(db, "interviews", row.interview.id), {
@@ -169,6 +219,20 @@ export default function ApprovalCenterPage() {
       <div>
         <h1 className="text-xl font-semibold text-neutral-900">Approval Center</h1>
         <p className="text-sm text-neutral-500">Everything currently waiting on a Core/Admin decision.</p>
+        {quota !== null && (
+          <p
+            className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-medium ${
+              quota <= 10
+                ? "bg-red-100 text-red-700"
+                : quota <= 30
+                ? "bg-amber-100 text-amber-700"
+                : "bg-neutral-100 text-neutral-600"
+            }`}
+          >
+            {quota} applicant emails left today
+            {quota <= 10 && " — decisions still save, but tell people directly"}
+          </p>
+        )}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">

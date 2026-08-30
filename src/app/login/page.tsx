@@ -8,6 +8,7 @@ import {
   createUserWithEmailAndPassword,
   updateProfile,
   sendEmailVerification,
+  sendPasswordResetEmail,
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
@@ -36,12 +37,41 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   // Only ever an in-app path, so this can't be used to bounce someone
   // off-site after login.
   const nextRaw = searchParams.get("next");
   const next = nextRaw && nextRaw.startsWith("/") && !nextRaw.startsWith("//") ? nextRaw : null;
+
+  /**
+   * Firebase sends the reset mail itself, so this doesn't consume the
+   * Apps Script daily quota. The same message shows whether or not the
+   * address exists, so this can't be used to discover who has an account.
+   */
+  async function resetPassword() {
+    if (!email.trim()) {
+      toast.error("Enter your email address first, then tap Forgot password");
+      return;
+    }
+    setResetting(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+    } catch (err) {
+      const code = err instanceof Error ? err.message : "";
+      // Anything other than a malformed address is reported the same way.
+      if (code.includes("invalid-email")) {
+        toast.error("That doesn't look like a valid email address");
+        return;
+      }
+    } finally {
+      setResetting(false);
+    }
+    toast.success(
+      "If that email has an account, a reset link is on its way — check your spam folder too."
+    );
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -162,6 +192,20 @@ function LoginForm() {
                 required
               />
             </FormField>
+
+            {mode === "signin" && (
+              <div className="-mt-1 text-right">
+                <button
+                  type="button"
+                  onClick={resetPassword}
+                  disabled={resetting}
+                  className="text-xs text-neutral-500 underline underline-offset-2 hover:text-[#EB0028] disabled:opacity-50"
+                >
+                  {resetting ? "Sending…" : "Forgot password?"}
+                </button>
+              </div>
+            )}
+
             <Button type="submit" className="w-full" loading={loading}>
               {mode === "signin" ? "Sign In" : "Create Account"}
             </Button>
