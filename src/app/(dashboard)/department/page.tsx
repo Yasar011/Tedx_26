@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Department, Task, UserProfile } from "@/lib/types";
@@ -10,6 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Select } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { logActivity } from "@/lib/activity";
+import { toast } from "sonner";
 import { Building2 } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { computeDepartmentHealth } from "@/lib/departmentHealth";
@@ -27,6 +30,31 @@ export default function DepartmentPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const viewingId = selectedId ?? profile?.departmentId ?? null;
+  const [togglingIntake, setTogglingIntake] = useState(false);
+
+  async function toggleIntake() {
+    if (!department || !profile) return;
+    setTogglingIntake(true);
+    try {
+      const next = !department.applicationsOpen;
+      await updateDoc(doc(db, "departments", department.id), { applicationsOpen: next });
+      setDepartment({ ...department, applicationsOpen: next });
+      await logActivity({
+        actorId: profile.uid,
+        actorName: profile.name,
+        action: next ? "DEPT_APPLICATIONS_OPENED" : "DEPT_APPLICATIONS_CLOSED",
+        targetType: "department",
+        targetId: department.id,
+        message: `${profile.name} ${next ? "opened" : "closed"} applications for ${department.name}`,
+        departmentId: department.id,
+      });
+      toast.success(next ? "Applications opened" : "Applications closed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update");
+    } finally {
+      setTogglingIntake(false);
+    }
+  }
 
   useEffect(() => {
     if (!canBrowseAll) return;
@@ -119,6 +147,31 @@ export default function DepartmentPage() {
           </div>
         </div>
       </div>
+
+      {/* Heads control their own intake; Admin keeps the global switch in
+          Settings. Shown here so it's where the Head actually works. */}
+      <Card className={department.applicationsOpen ? "border-emerald-200" : "border-amber-200"}>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+          <div>
+            <p className="text-sm font-medium text-neutral-900">
+              Applications are {department.applicationsOpen ? "OPEN" : "CLOSED"} for{" "}
+              {department.name}
+            </p>
+            <p className="text-xs text-neutral-500">
+              {department.applicationsOpen
+                ? "Students can pick this department on the application form."
+                : "This department is hidden from the application form."}
+            </p>
+          </div>
+          <Button
+            variant={department.applicationsOpen ? "outline" : "primary"}
+            loading={togglingIntake}
+            onClick={toggleIntake}
+          >
+            {department.applicationsOpen ? "Close applications" : "Open applications"}
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Link href="/tasks">

@@ -17,20 +17,6 @@ import {
 export const FOUNDING_ADMIN_UID =
   process.env.NEXT_PUBLIC_FOUNDING_ADMIN_UID || "TC9hbFuw3HgnKnzEZUFU4ZKrpKA2";
 
-export const DEFAULT_DEPARTMENTS = [
-  { name: "PR & Outreach", code: "PR" },
-  { name: "Sponsorship", code: "SP" },
-  { name: "Social Media", code: "SM" },
-  { name: "Content", code: "CN" },
-  { name: "Design", code: "DS" },
-  { name: "Technical", code: "TC" },
-  { name: "Photography", code: "PH" },
-  { name: "Videography", code: "VD" },
-  { name: "Operations", code: "OP" },
-  { name: "Hospitality", code: "HP" },
-  { name: "Stage Management", code: "ST" },
-  { name: "Logistics", code: "LG" },
-];
 
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   SUBMITTED: "Submitted",
@@ -119,6 +105,8 @@ export const ISSUE_PRIORITY_COLORS: Record<IssuePriority, string> = {
   HIGH: "bg-amber-100 text-amber-700",
   CRITICAL: "bg-red-100 text-red-700",
 };
+
+export { DEFAULT_DEPARTMENTS } from "./defaultDepartments";
 
 export const TEDX_BRAND_RED = "#EB0028";
 

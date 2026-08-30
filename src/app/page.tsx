@@ -12,6 +12,7 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { ConnectionErrorScreen } from "@/components/auth/ConnectionErrorScreen";
 import { LogoPlate } from "@/components/ui/Logo";
 import { Reveal } from "@/components/ui/Reveal";
+import { IntroLoader } from "@/components/ui/IntroLoader";
 import { ArrowRight, Sparkles, Users, CalendarDays } from "lucide-react";
 
 export default function Home() {
@@ -60,6 +61,8 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-neutral-950 text-white">
+      <IntroLoader />
+
       {/* Ambient drifting glow behind the hero. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="animate-glow absolute -top-40 left-1/2 h-[38rem] w-[38rem] -translate-x-1/2 rounded-full bg-[#EB0028]/25 blur-[120px]" />

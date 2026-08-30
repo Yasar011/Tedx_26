@@ -22,7 +22,7 @@ service cloud.firestore {
     // FOUNDING_ADMIN_UID in src/lib/constants.ts. Checked first so it
     // short-circuits before the users/ lookup in myRole().
     function isFoundingAdmin() {
-      return isSignedIn() && request.auth.uid == 'TC9hbFuw3HgnKnzEZUFU4ZKrpKA2';
+      return isSignedIn() && request.auth.uid == 'a8WrtFFMddUQ8mCCRV2znQfqDFI2';
     }
 
     function isAdmin() {

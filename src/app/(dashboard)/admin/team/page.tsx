@@ -56,15 +56,44 @@ export default function AdminTeamPage() {
   async function setDepartment(user: UserProfile, departmentId: string) {
     await updateDoc(doc(db, "users", user.uid), { departmentId: departmentId || null });
     if (departmentId && user.role === "department_head") {
-      await updateDoc(doc(db, "departments", departmentId), { headUserId: user.uid });
+      // headName is denormalised because applicants can't read other users'
+      // profiles, but do need to see who runs a department before agreeing.
+      await updateDoc(doc(db, "departments", departmentId), {
+        headUserId: user.uid,
+        headName: user.name,
+      });
+    }
+    if (user.departmentId && user.departmentId !== departmentId) {
+      await clearStaleDenormalisedNames(user);
     }
     toast.success(`${user.name}'s department updated`);
     load();
   }
 
+  /** Drops this person's name from the department they just left. */
+  async function clearStaleDenormalisedNames(user: UserProfile) {
+    if (!user.departmentId) return;
+    const previous = departments.find((d) => d.id === user.departmentId);
+    if (!previous) return;
+    const patch: Record<string, unknown> = {};
+    if (previous.headName === user.name) {
+      patch.headName = null;
+      patch.headUserId = null;
+    }
+    if (previous.coHeadName === user.name) patch.coHeadName = null;
+    if (Object.keys(patch).length > 0) {
+      await updateDoc(doc(db, "departments", previous.id), patch);
+    }
+  }
+
   async function toggleCoHead(user: UserProfile) {
     const next = !user.isCoHead;
     await updateDoc(doc(db, "users", user.uid), { isCoHead: next });
+    if (user.departmentId) {
+      await updateDoc(doc(db, "departments", user.departmentId), {
+        coHeadName: next ? user.name : null,
+      });
+    }
     await logActivity({
       actorId: profile!.uid,
       actorName: profile!.name,

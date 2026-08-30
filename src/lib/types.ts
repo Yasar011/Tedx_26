@@ -43,10 +43,20 @@ export interface Department {
   goals?: string;
   guidelines?: string;
   headUserId: string | null;
+  /** Denormalised so applicants — who cannot read other users' profiles —
+   *  can still see who runs a department on the agreement step. */
+  headName?: string | null;
+  coHeadName?: string | null;
   active: boolean;
   applicationsOpen: boolean;
   createdAt: number;
 }
+
+/** Shape used to seed departments into a fresh project. */
+export type DepartmentSeed = Pick<
+  Department,
+  "name" | "code" | "description" | "purpose" | "responsibilities" | "guidelines"
+>;
 
 export interface Application {
   id: string;
@@ -64,6 +74,14 @@ export interface Application {
   why: string;
   availability: string;
   status: ApplicationStatus;
+  /** Passport-size photo, stored on Cloudinary. */
+  photoUrl?: string | null;
+  photoPublicId?: string | null;
+  /** Recorded when the applicant reads a department's brief and accepts it.
+   *  Kept as an audit trail of what they actually agreed to. */
+  agreedToDepartment1?: boolean;
+  agreedToDepartment2?: boolean;
+  agreedAt?: number | null;
   createdAt: number;
   updatedAt: number;
   reviewedBy?: string | null;

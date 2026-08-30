@@ -41,6 +41,7 @@ export default function ApprovalCenterPage() {
   const [pendingFiles, setPendingFiles] = useState(0);
   const [pendingTasks, setPendingTasks] = useState(0);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const isAdmin = profile?.role === "admin";
 
   async function load() {
     try {
@@ -208,11 +209,29 @@ export default function ApprovalCenterPage() {
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-3 text-sm sm:grid-cols-2">
-                  <Field label="Email" value={row.application.email} />
-                  <Field label="Phone" value={row.application.phone} />
-                  <Field label="Programme" value={row.application.programme} />
-                  <Field label="Why TEDx?" value={row.application.why} />
+                <div className="flex gap-4">
+                  {row.application.photoUrl && (
+                    <a
+                      href={row.application.photoUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0"
+                      title="Open full size"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={row.application.photoUrl}
+                        alt={row.application.name}
+                        className="h-28 w-24 rounded-lg border border-neutral-200 object-cover"
+                      />
+                    </a>
+                  )}
+                  <div className="grid flex-1 gap-3 text-sm sm:grid-cols-2">
+                    <Field label="Email" value={row.application.email} />
+                    <Field label="Phone" value={row.application.phone} />
+                    <Field label="Programme" value={row.application.programme} />
+                    <Field label="Why TEDx?" value={row.application.why} />
+                  </div>
                 </div>
 
                 {row.interview && (
@@ -258,12 +277,21 @@ export default function ApprovalCenterPage() {
                 />
 
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    loading={busyId === row.application.id}
-                    onClick={() => decide(row, "APPROVED")}
-                  >
-                    Approve
-                  </Button>
+                  {/* Final approval issues the TEDx Member ID and activates
+                      the account, so it is reserved for Admin. Core can still
+                      reject, waitlist or send back for another look. */}
+                  {isAdmin ? (
+                    <Button
+                      loading={busyId === row.application.id}
+                      onClick={() => decide(row, "APPROVED")}
+                    >
+                      Approve &amp; issue TEDx ID
+                    </Button>
+                  ) : (
+                    <span className="inline-flex items-center rounded-lg bg-neutral-100 px-3 py-2 text-xs text-neutral-500">
+                      Final approval and TEDx ID are issued by an Admin
+                    </span>
+                  )}
                   <Button
                     variant="danger"
                     loading={busyId === row.application.id}

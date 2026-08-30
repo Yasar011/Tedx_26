@@ -25,7 +25,11 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
-import { Ban } from "lucide-react";
+import { Ban, Check, Image as ImageIcon } from "lucide-react";
+import { compressImage } from "@/lib/imageCompress";
+import { uploadToCloudinary } from "@/lib/cloudinary";
+import { DepartmentAgreementModal } from "@/components/apply/DepartmentAgreementModal";
+import { VerifyEmailScreen } from "@/components/auth/VerifyEmailScreen";
 
 export default function ApplyPage() {
   const { firebaseUser, profile, loading: authLoading } = useAuth();
@@ -50,6 +54,68 @@ export default function ApplyPage() {
     why: "",
     availability: "",
   });
+
+  // Passport photo, compressed in the browser before upload.
+  const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+
+  // A department only counts as chosen once its brief has been accepted, so
+  // the pending selection is held here until the applicant agrees.
+  const [agreed1, setAgreed1] = useState(false);
+  const [agreed2, setAgreed2] = useState(false);
+  const [pending, setPending] = useState<{ slot: 1 | 2; department: Department } | null>(null);
+
+  async function handlePhotoPick(file: File) {
+    setPhotoBusy(true);
+    try {
+      const compressed = await compressImage(file);
+      setPhoto((prev) => {
+        if (prev) URL.revokeObjectURL(prev.preview);
+        return { file: compressed, preview: URL.createObjectURL(compressed) };
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not process that image");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  /** Opens the brief for a selection; nothing is committed until they agree. */
+  function requestDepartment(slot: 1 | 2, name: string) {
+    if (!name) {
+      if (slot === 1) {
+        setForm((f) => ({ ...f, departmentPreference: "" }));
+        setAgreed1(false);
+      } else {
+        setForm((f) => ({ ...f, departmentPreference2: "" }));
+        setAgreed2(false);
+      }
+      return;
+    }
+    const department = departments.find((d) => d.name === name);
+    if (!department) return;
+    setPending({ slot, department });
+  }
+
+  function confirmDepartment() {
+    if (!pending) return;
+    const { slot, department } = pending;
+    if (slot === 1) {
+      setForm((f) => ({
+        ...f,
+        departmentPreference: department.name,
+        // Clear a second choice that now duplicates the first.
+        departmentPreference2:
+          f.departmentPreference2 === department.name ? "" : f.departmentPreference2,
+      }));
+      setAgreed1(true);
+      if (form.departmentPreference2 === department.name) setAgreed2(false);
+    } else {
+      setForm((f) => ({ ...f, departmentPreference2: department.name }));
+      setAgreed2(true);
+    }
+    setPending(null);
+  }
 
   useEffect(() => {
     if (!firebaseUser) return;
@@ -91,8 +157,23 @@ export default function ApplyPage() {
       toast.error(`Only ${NIFT_EMAIL_DOMAIN} email addresses can apply`);
       return;
     }
+    if (!photo) {
+      toast.error("Please add a passport-size photo");
+      return;
+    }
+    if (!agreed1) {
+      toast.error("Please review and accept your first-preference department");
+      return;
+    }
+    if (form.departmentPreference2 && !agreed2) {
+      toast.error("Please review and accept your second-preference department");
+      return;
+    }
+
     setSubmitting(true);
     try {
+      const uploaded = await uploadToCloudinary(photo.file, "TEDxNIFT/applicants");
+
       const appRef = await addDoc(collection(db, "applications"), {
         applicantUserId: firebaseUser.uid,
         name: profile.name,
@@ -107,6 +188,11 @@ export default function ApplyPage() {
         portfolio: form.portfolio,
         why: form.why,
         availability: form.availability,
+        photoUrl: uploaded.url,
+        photoPublicId: uploaded.publicId,
+        agreedToDepartment1: agreed1,
+        agreedToDepartment2: form.departmentPreference2 ? agreed2 : false,
+        agreedAt: Date.now(),
         status: "SUBMITTED",
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -160,6 +246,12 @@ export default function ApplyPage() {
         </Card>
       </div>
     );
+  }
+
+  // The application form stays locked until the email is confirmed, so every
+  // applicant on file has a reachable address.
+  if (!firebaseUser.emailVerified) {
+    return <VerifyEmailScreen email={firebaseUser.email ?? ""} context="apply" />;
   }
 
   if (loadingData) return <FullPageSpinner />;
@@ -267,12 +359,18 @@ export default function ApplyPage() {
                 </FormField>
               </div>
 
+              <PhotoField photo={photo} onPick={handlePhotoPick} busy={photoBusy} />
+
               <div className="grid gap-5 sm:grid-cols-2">
-                <FormField label="Department Preference" required>
+                <FormField
+                  label="First Preference"
+                  required
+                  hint="You'll be shown this department's brief to accept"
+                >
                   <Select
                     required
                     value={form.departmentPreference}
-                    onChange={(e) => update("departmentPreference", e.target.value)}
+                    onChange={(e) => requestDepartment(1, e.target.value)}
                   >
                     <option value="">Select a department</option>
                     {departments.map((d) => (
@@ -285,19 +383,38 @@ export default function ApplyPage() {
                 <FormField label="Second Preference">
                   <Select
                     value={form.departmentPreference2}
-                    onChange={(e) => update("departmentPreference2", e.target.value)}
+                    onChange={(e) => requestDepartment(2, e.target.value)}
                   >
                     <option value="">None</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>
-                        {d.name}
-                      </option>
-                    ))}
+                    {departments
+                      .filter((d) => d.name !== form.departmentPreference)
+                      .map((d) => (
+                        <option key={d.id} value={d.name}>
+                          {d.name}
+                        </option>
+                      ))}
                   </Select>
                 </FormField>
               </div>
 
-              <DepartmentInfoPanel departments={departments} />
+              {(form.departmentPreference || form.departmentPreference2) && (
+                <div className="space-y-2">
+                  {form.departmentPreference && (
+                    <AgreementChip
+                      label={`1st choice — ${form.departmentPreference}`}
+                      agreed={agreed1}
+                      onReview={() => requestDepartment(1, form.departmentPreference)}
+                    />
+                  )}
+                  {form.departmentPreference2 && (
+                    <AgreementChip
+                      label={`2nd choice — ${form.departmentPreference2}`}
+                      agreed={agreed2}
+                      onReview={() => requestDepartment(2, form.departmentPreference2)}
+                    />
+                  )}
+                </div>
+              )}
 
               <FormField label="Relevant Skills" required>
                 <Textarea
@@ -344,33 +461,100 @@ export default function ApplyPage() {
           </CardContent>
         </Card>
       </div>
+
+      <DepartmentAgreementModal
+        open={!!pending}
+        department={pending?.department ?? null}
+        preferenceLabel={pending?.slot === 2 ? "Second preference" : "First preference"}
+        onAgree={confirmDepartment}
+        onCancel={() => setPending(null)}
+      />
     </div>
   );
 }
 
-function DepartmentInfoPanel({ departments }: { departments: Department[] }) {
-  const withInfo = departments.filter((d) => d.description || d.purpose || d.responsibilities);
-  if (withInfo.length === 0) return null;
-
+function PhotoField({
+  photo,
+  onPick,
+  busy,
+}: {
+  photo: { file: File; preview: string } | null;
+  onPick: (file: File) => void;
+  busy: boolean;
+}) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-        What each department does
-      </p>
-      <div className="space-y-3">
-        {withInfo.map((d) => (
-          <div key={d.id} className="text-sm">
-            <p className="font-medium text-neutral-900">{d.name}</p>
-            {d.description && <p className="text-neutral-600">{d.description}</p>}
-            {d.responsibilities && (
-              <p className="text-neutral-500">
-                <span className="font-medium">Responsibilities: </span>
-                {d.responsibilities}
-              </p>
-            )}
-          </div>
-        ))}
+    <FormField
+      label="Passport-size photo"
+      required
+      hint="JPG or PNG. Large photos are resized automatically — no need to compress it yourself."
+    >
+      <div className="flex items-center gap-4">
+        <div className="flex h-24 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-300 bg-neutral-50">
+          {photo ? (
+            // Object URL of a local file — next/image can't optimise this.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photo.preview} alt="Your photo" className="h-full w-full object-cover" />
+          ) : (
+            <ImageIcon className="h-6 w-6 text-neutral-300" />
+          )}
+        </div>
+        <div className="min-w-0">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onPick(f);
+                e.target.value = "";
+              }}
+            />
+            {busy ? "Processing…" : photo ? "Change photo" : "Choose photo"}
+          </label>
+          {photo && (
+            <p className="mt-1.5 text-xs text-neutral-500">
+              Ready — {(photo.file.size / 1024).toFixed(0)} KB
+            </p>
+          )}
+        </div>
       </div>
+    </FormField>
+  );
+}
+
+function AgreementChip({
+  label,
+  agreed,
+  onReview,
+}: {
+  label: string;
+  agreed: boolean;
+  onReview: () => void;
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${
+        agreed
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border-amber-200 bg-amber-50 text-amber-800"
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-2">
+        {agreed ? (
+          <Check className="h-4 w-4 shrink-0" />
+        ) : (
+          <Ban className="h-4 w-4 shrink-0" />
+        )}
+        <span className="truncate">{label}</span>
+      </span>
+      <button
+        type="button"
+        onClick={onReview}
+        className="shrink-0 text-xs font-medium underline underline-offset-2"
+      >
+        {agreed ? "Read again" : "Read & accept"}
+      </button>
     </div>
   );
 }

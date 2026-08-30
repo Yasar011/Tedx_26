@@ -168,15 +168,24 @@ export default function AdminDepartmentsPage() {
     setSaving(true);
     try {
       for (const d of DEFAULT_DEPARTMENTS) {
-        if (departments.some((existing) => existing.code === d.code)) continue;
+        // Match on name too — the same team re-seeded under a different code
+        // would otherwise duplicate and split its applicants.
+        const exists = departments.some(
+          (e) =>
+            e.code.trim().toUpperCase() === d.code.trim().toUpperCase() ||
+            e.name.trim().toLowerCase() === d.name.trim().toLowerCase()
+        );
+        if (exists) continue;
         await addDoc(collection(db, "departments"), {
           name: d.name,
           code: d.code,
-          description: "",
-          purpose: "",
-          responsibilities: "",
-          guidelines: "",
+          description: d.description ?? "",
+          purpose: d.purpose ?? "",
+          responsibilities: d.responsibilities ?? "",
+          guidelines: d.guidelines ?? "",
           headUserId: null,
+          headName: null,
+          coHeadName: null,
           active: true,
           applicationsOpen: true,
           createdAt: Date.now(),
@@ -209,11 +218,11 @@ export default function AdminDepartmentsPage() {
           <p className="text-sm text-neutral-500">{departments.length} departments configured</p>
         </div>
         <div className="flex gap-2">
-          {departments.length === 0 && (
-            <Button variant="outline" onClick={seedDefaults} loading={saving}>
-              Add default departments
-            </Button>
-          )}
+          {/* Always available: it skips anything already present, so it also
+              restores a department that was deleted by mistake. */}
+          <Button variant="outline" onClick={seedDefaults} loading={saving}>
+            {departments.length === 0 ? "Add default departments" : "Restore missing defaults"}
+          </Button>
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> New Department
           </Button>
