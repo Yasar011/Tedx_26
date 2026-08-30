@@ -141,7 +141,13 @@ service cloud.firestore {
     // ---------- INTERVIEWS ----------
     match /interviews/{interviewId} {
       allow read: if isCore() ||
-        (isDeptHead() && resource.data.departmentId == myDepartmentId());
+        (isDeptHead() && resource.data.departmentId == myDepartmentId()) ||
+        // The applicant may read their OWN interview, so their dashboard can
+        // show them the scheduled date. Ratings and the recommendation are
+        // never rendered to them — only the time.
+        (isSignedIn() &&
+          get(/databases/$(database)/documents/applications/$(resource.data.applicationId))
+            .data.applicantUserId == request.auth.uid);
 
       allow create: if isCore() ||
         (isDeptHead() &&

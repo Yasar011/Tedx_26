@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
+import { formatDate, formatDateTime } from "@/lib/utils";
 import { FileText, CheckCircle2 } from "lucide-react";
 
 const PIPELINE: Application["status"][] = [
@@ -26,6 +26,7 @@ const PIPELINE: Application["status"][] = [
 export default function ApplicantPage() {
   const { profile } = useAuth();
   const [application, setApplication] = useState<Application | null>(null);
+  const [interviewAt, setInterviewAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,7 +36,23 @@ export default function ApplicantPage() {
         query(collection(db, "applications"), where("applicantUserId", "==", profile.uid))
       );
       if (!snap.empty) {
-        setApplication({ id: snap.docs[0].id, ...snap.docs[0].data() } as Application);
+        const app = { id: snap.docs[0].id, ...snap.docs[0].data() } as Application;
+        setApplication(app);
+
+        // Pull the scheduled time so they can see when their interview is
+        // without waiting on the email. Only the time is shown — never the
+        // ratings or the interviewer's recommendation.
+        try {
+          const ivSnap = await getDocs(
+            query(collection(db, "interviews"), where("applicationId", "==", app.id))
+          );
+          const times = ivSnap.docs
+            .map((d) => (d.data() as { scheduledAt?: number }).scheduledAt)
+            .filter((t): t is number => typeof t === "number");
+          if (times.length > 0) setInterviewAt(Math.max(...times));
+        } catch {
+          /* non-fatal: the status pipeline still renders */
+        }
       }
       setLoading(false);
     })();
@@ -62,6 +79,22 @@ export default function ApplicantPage() {
         <h1 className="text-xl font-semibold text-neutral-900">Welcome, {application.name}</h1>
         <p className="text-sm text-neutral-500">Track your TEDxNIFT Jodhpur application status below.</p>
       </div>
+
+      {interviewAt && !isTerminalNegative && (
+        <Card className="border-[#EB0028]/30 bg-red-50/40">
+          <CardContent className="py-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#EB0028]">
+              Your interview
+            </p>
+            <p className="mt-1 text-lg font-semibold text-neutral-900">
+              {formatDateTime(interviewAt)}
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              Please be available a few minutes early. We also emailed you these details.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

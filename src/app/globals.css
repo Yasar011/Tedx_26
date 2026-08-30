@@ -113,3 +113,113 @@ body {
     transition: none;
   }
 }
+
+/* ---------------------------------------------------------------
+   3D intro sequence.
+
+   Real 3D via CSS transforms (perspective + translateZ/rotate) rather
+   than a WebGL library, so the public landing page gains no JS bundle
+   weight. Every transform is compositor-friendly, and the whole thing
+   is skipped under prefers-reduced-motion.
+   --------------------------------------------------------------- */
+
+/* The logo plate flies in from deep space, turning to face the viewer
+   with a slight overshoot so it settles rather than snapping. */
+@keyframes tedx-3d-logo-in {
+  0% {
+    opacity: 0;
+    transform: translateZ(-900px) rotateY(-75deg) rotateX(12deg);
+  }
+  55% {
+    opacity: 1;
+    transform: translateZ(60px) rotateY(10deg) rotateX(-3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateZ(0) rotateY(0deg) rotateX(0deg);
+  }
+}
+
+/* A receding stage floor. Scrolling the gradient sells the depth. */
+@keyframes tedx-3d-floor {
+  from {
+    background-position-y: 0px;
+  }
+  to {
+    background-position-y: 120px;
+  }
+}
+
+/* Rings lying flat on that floor, turning like a stage revolve. */
+@keyframes tedx-3d-ring {
+  from {
+    transform: rotateX(78deg) scale(0.4);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  to {
+    transform: rotateX(78deg) scale(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes tedx-3d-tagline {
+  from {
+    opacity: 0;
+    transform: translateZ(-200px) translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0) translateY(0);
+  }
+}
+
+/* Exit pushes the camera THROUGH the splash into the page. */
+@keyframes tedx-3d-out {
+  from {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(750px);
+  }
+}
+
+.intro-stage {
+  perspective: 1100px;
+  perspective-origin: 50% 45%;
+}
+
+.intro-logo-3d {
+  transform-style: preserve-3d;
+  animation: tedx-3d-logo-in 1.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+.intro-floor {
+  animation: tedx-3d-floor 3s linear infinite;
+}
+
+.intro-ring {
+  animation: tedx-3d-ring 2.6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.intro-tagline-3d {
+  animation: tedx-3d-tagline 0.9s cubic-bezier(0.22, 1, 0.36, 1) 1.5s both;
+}
+
+.intro-leaving-3d {
+  animation: tedx-3d-out 0.75s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-logo-3d,
+  .intro-floor,
+  .intro-ring,
+  .intro-tagline-3d,
+  .intro-leaving-3d {
+    animation: none !important;
+  }
+}
