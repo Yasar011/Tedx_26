@@ -6,6 +6,7 @@ import { initials } from "@/lib/utils";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { NotificationBell } from "./NotificationBell";
+import { MobileNav } from "./MobileNav";
 
 export function Topbar() {
   const { profile, signOut } = useAuth();
@@ -15,9 +16,18 @@ export function Topbar() {
 
   return (
     <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-white px-4 md:px-6">
-      <div>
-        <p className="text-sm font-semibold text-neutral-900">{ROLE_LABELS[profile.role]}</p>
-        {profile.tedxId && <p className="text-xs text-neutral-500">{profile.tedxId}</p>}
+      <div className="flex min-w-0 items-center gap-2">
+        <MobileNav
+          role={profile.role}
+          isCoHead={!!profile.isCoHead}
+          hasDepartment={!!profile.departmentId}
+        />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-neutral-900">
+            {ROLE_LABELS[profile.role]}
+          </p>
+          {profile.tedxId && <p className="text-xs text-neutral-500">{profile.tedxId}</p>}
+        </div>
       </div>
       <div className="flex items-center gap-3">
         <NotificationBell />
