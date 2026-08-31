@@ -263,9 +263,22 @@ export default function InterviewDetailPage() {
           </CardHeader>
           <CardContent className="space-y-5">
             {interview.scheduledAt && (
-              <p className="text-xs text-neutral-500">
-                Scheduled for {formatDateTime(interview.scheduledAt)}
-              </p>
+              <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                <p className="text-xs text-neutral-500">
+                  Scheduled for {formatDateTime(interview.scheduledAt)}
+                </p>
+                {/* Whether the applicant actually confirmed — an unconfirmed
+                    slot shouldn't be held. */}
+                <p className="mt-1 text-sm font-medium">
+                  {interview.applicantAccepted === true ? (
+                    <span className="text-emerald-700">✓ Applicant confirmed they&apos;ll attend</span>
+                  ) : interview.applicantAccepted === false ? (
+                    <span className="text-red-700">✕ Applicant declined — application withdrawn</span>
+                  ) : (
+                    <span className="text-amber-700">Awaiting the applicant&apos;s confirmation</span>
+                  )}
+                </p>
+              </div>
             )}
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {RATING_FIELDS.map((field) => (

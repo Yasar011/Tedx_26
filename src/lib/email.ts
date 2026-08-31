@@ -68,10 +68,14 @@ export const applicantEmails = {
 
   interviewScheduled(name: string, department: string, whenMs: number, note?: string) {
     return {
-      subject: `Your interview is scheduled — ${EVENT}`,
+      subject: `Confirm your interview — ${EVENT}`,
       heading: `Interview scheduled, ${name.split(" ")[0]}`,
-      message: `Your interview for the ${department} team has been scheduled. Please be available a few minutes early.`,
-      detail: [`When: ${formatDateTime(whenMs)}`, note ? `Note: ${note}` : ""]
+      message: `Your interview for the ${department} team has been scheduled. Please sign in and confirm you can make it — unconfirmed interviews are not held.`,
+      detail: [
+        `When: ${formatDateTime(whenMs)}`,
+        note ? `Note: ${note}` : "",
+        `Sign in to the platform and choose "I'll be there" to confirm, or decline if you can't make it.`,
+      ]
         .filter(Boolean)
         .join("\n"),
     };

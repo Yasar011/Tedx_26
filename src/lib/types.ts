@@ -114,6 +114,10 @@ export interface Interview {
   interviewerUserId: string;
   interviewerName: string;
   scheduledAt: number | null;
+  /** The applicant's own confirmation. null = not answered yet. Declining
+   *  withdraws the application — they can't turn up unconfirmed. */
+  applicantAccepted?: boolean | null;
+  applicantRespondedAt?: number | null;
   notes: string;
   ratings: InterviewRatings | null;
   recommendation: Recommendation | null;

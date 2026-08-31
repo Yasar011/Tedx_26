@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Application } from "@/lib/types";
+import { Application, Interview } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -14,6 +14,7 @@ import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/cons
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { FileText, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { notify } from "@/lib/notifications";
 
 const PIPELINE: Application["status"][] = [
   "SUBMITTED",
@@ -28,9 +29,11 @@ const PIPELINE: Application["status"][] = [
 export default function ApplicantPage() {
   const { profile } = useAuth();
   const [application, setApplication] = useState<Application | null>(null);
-  const [interviewAt, setInterviewAt] = useState<number | null>(null);
+  const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
-  const [deciding, setDeciding] = useState<"accept" | "decline" | null>(null);
+  const [deciding, setDeciding] = useState<
+    "accept" | "decline" | "accept-interview" | "decline-interview" | null
+  >(null);
 
   useEffect(() => {
     if (!profile) return;
@@ -49,10 +52,10 @@ export default function ApplicantPage() {
           const ivSnap = await getDocs(
             query(collection(db, "interviews"), where("applicationId", "==", app.id))
           );
-          const times = ivSnap.docs
-            .map((d) => (d.data() as { scheduledAt?: number }).scheduledAt)
-            .filter((t): t is number => typeof t === "number");
-          if (times.length > 0) setInterviewAt(Math.max(...times));
+          const interviews = ivSnap.docs
+            .map((d) => ({ id: d.id, ...d.data() } as Interview))
+            .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+          if (interviews.length > 0) setInterview(interviews[0]);
         } catch {
           /* non-fatal: the status pipeline still renders */
         }
@@ -92,6 +95,49 @@ export default function ApplicantPage() {
       window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update your application");
+      setDeciding(null);
+    }
+  }
+
+  /**
+   * The applicant confirming or declining their interview slot.
+   *
+   * Declining withdraws the application outright — an interview nobody has
+   * confirmed shouldn't sit on a Head's calendar. The interviewer is
+   * notified in-app rather than by email, because the mail relay only
+   * accepts staff roles (which is what keeps the daily quota safe).
+   */
+  async function respondToInterview(accept: boolean) {
+    if (!application || !interview) return;
+    setDeciding(accept ? "accept-interview" : "decline-interview");
+    try {
+      await updateDoc(doc(db, "interviews", interview.id), {
+        applicantAccepted: accept,
+        applicantRespondedAt: Date.now(),
+      });
+
+      if (!accept) {
+        await updateDoc(doc(db, "applications", application.id), {
+          status: "WITHDRAWN",
+          updatedAt: Date.now(),
+        });
+      }
+
+      await notify({
+        userId: interview.interviewerUserId,
+        title: accept ? "Interview confirmed" : "Interview declined",
+        message: accept
+          ? `${application.name} confirmed their interview.`
+          : `${application.name} can't make their interview and has withdrawn.`,
+        type: "INTERVIEW_RESPONSE",
+        relatedId: application.id,
+        link: `/department/applicants/${application.id}`,
+      }).catch(() => {});
+
+      toast.success(accept ? "Interview confirmed" : "Application withdrawn");
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save your response");
       setDeciding(null);
     }
   }
@@ -154,18 +200,46 @@ export default function ApplicantPage() {
         </Card>
       )}
 
-      {interviewAt && !isTerminalNegative && (
+      {interview?.scheduledAt && !isTerminalNegative && (
         <Card className="border-[#EB0028]/30 bg-red-50/40">
           <CardContent className="py-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-[#EB0028]">
               Your interview
             </p>
             <p className="mt-1 text-lg font-semibold text-neutral-900">
-              {formatDateTime(interviewAt)}
+              {formatDateTime(interview.scheduledAt)}
             </p>
-            <p className="mt-1 text-xs text-neutral-500">
-              Please be available a few minutes early. We also emailed you these details.
-            </p>
+
+            {interview.applicantAccepted === true ? (
+              <p className="mt-2 text-sm text-emerald-700">
+                ✓ You&apos;ve confirmed you&apos;ll attend. Please be a few minutes early.
+              </p>
+            ) : (
+              <>
+                <p className="mt-1 text-sm text-neutral-700">
+                  Please confirm you can make it — interviews aren&apos;t held for applicants
+                  who haven&apos;t confirmed.
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    loading={deciding === "accept-interview"}
+                    onClick={() => respondToInterview(true)}
+                  >
+                    I&apos;ll be there
+                  </Button>
+                  <Button
+                    variant="outline"
+                    loading={deciding === "decline-interview"}
+                    onClick={() => respondToInterview(false)}
+                  >
+                    I can&apos;t make it
+                  </Button>
+                </div>
+                <p className="mt-2 text-xs text-neutral-500">
+                  Declining withdraws your application.
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       )}
