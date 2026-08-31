@@ -178,14 +178,32 @@ export default function InterviewDetailPage() {
         <ArrowLeft className="h-4 w-4" /> Back to applicants
       </Link>
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900">{application.name}</h1>
-          <p className="text-sm text-neutral-500">{application.email} · {application.phone}</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-4">
+          {application.photoUrl && (
+            <a href={application.photoUrl} target="_blank" rel="noreferrer" title="Open full size">
+              {/* Cloudinary URL — next/image would need the host allow-listed. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={application.photoUrl}
+                alt={application.name}
+                className="h-32 rounded-lg border border-neutral-200 object-cover"
+                style={{ width: "6.5rem" }}
+              />
+            </a>
+          )}
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900">{application.name}</h1>
+            <p className="text-sm text-neutral-500">{application.email}</p>
+            <p className="text-sm text-neutral-500">{application.phone}</p>
+            <Badge className={`mt-2 ${APPLICATION_STATUS_COLORS[application.status]}`}>
+              {APPLICATION_STATUS_LABELS[application.status]}
+            </Badge>
+          </div>
         </div>
-        <Badge className={APPLICATION_STATUS_COLORS[application.status]}>
-          {APPLICATION_STATUS_LABELS[application.status]}
-        </Badge>
+        <Button variant="outline" onClick={() => window.print()} className="print:hidden">
+          Download PDF
+        </Button>
       </div>
 
       <Card>
@@ -194,6 +212,22 @@ export default function InterviewDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <Field label="Programme" value={`${application.programme} · Semester ${application.semester}`} />
+          <Field
+            label="First Preference"
+            value={`${application.departmentPreference}${
+              application.agreedToDepartment1 ? "  ✓ agreed" : ""
+            }`}
+          />
+          <Field
+            label="Second Preference"
+            value={
+              application.departmentPreference2
+                ? `${application.departmentPreference2}${
+                    application.agreedToDepartment2 ? "  ✓ agreed" : ""
+                  }`
+                : "—"
+            }
+          />
           <Field label="Skills" value={application.skills} />
           <Field label="Experience" value={application.experience || "—"} />
           <Field label="Portfolio" value={application.portfolio || "—"} />

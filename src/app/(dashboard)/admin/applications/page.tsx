@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { Application } from "@/lib/types";
@@ -11,9 +12,10 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
-import { FileText, Search } from "lucide-react";
+import { FileText, Search, ChevronRight, Image as ImageIcon } from "lucide-react";
 
 export default function AdminApplicationsPage() {
+  const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -83,20 +85,43 @@ export default function AdminApplicationsPage() {
               <table className="w-full text-sm">
                 <thead className="border-b border-neutral-200 bg-neutral-50 text-left text-xs uppercase text-neutral-500">
                   <tr>
-                    <th className="px-4 py-3">Name</th>
+                    <th className="px-4 py-3">Applicant</th>
                     <th className="px-4 py-3">Department</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3">Applied</th>
+                    <th className="px-4 py-3" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-100">
                   {filtered.map((a) => (
-                    <tr key={a.id} className="hover:bg-neutral-50">
+                    // The whole row navigates — previously only the name was a
+                    // link, and it was styled identically to plain text, so the
+                    // page's primary action was effectively invisible.
+                    <tr
+                      key={a.id}
+                      onClick={() => router.push(`/admin/applications/${a.id}`)}
+                      className="cursor-pointer transition-colors hover:bg-neutral-50"
+                    >
                       <td className="px-4 py-3">
-                        <Link href={`/admin/applications/${a.id}`} className="font-medium text-neutral-900 hover:underline">
-                          {a.name}
-                        </Link>
-                        <p className="text-xs text-neutral-500">{a.email}</p>
+                        <div className="flex items-center gap-3">
+                          {a.photoUrl ? (
+                            // Cloudinary URL — next/image would need the host allow-listed.
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={a.photoUrl}
+                              alt=""
+                              className="h-11 w-9 shrink-0 rounded border border-neutral-200 object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-11 w-9 shrink-0 items-center justify-center rounded border border-dashed border-neutral-200 bg-neutral-50">
+                              <ImageIcon className="h-4 w-4 text-neutral-300" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate font-medium text-neutral-900">{a.name}</p>
+                            <p className="truncate text-xs text-neutral-500">{a.email}</p>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-neutral-700">{a.departmentPreference}</td>
                       <td className="px-4 py-3">
@@ -105,6 +130,15 @@ export default function AdminApplicationsPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-neutral-500">{formatDate(a.createdAt)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <Link
+                          href={`/admin/applications/${a.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                        >
+                          View full <ChevronRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

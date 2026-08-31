@@ -196,16 +196,36 @@ export default function DepartmentApplicantsPage() {
           {filtered.map((app) => (
             <Card key={app.id}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div>
-                  <p className="text-sm font-semibold text-neutral-900">{app.name}</p>
-                  <p className="text-xs text-neutral-500">
-                    {app.programme} · Sem {app.semester} · Applied {formatDate(app.createdAt)}
-                  </p>
+                <div className="flex min-w-0 items-center gap-3">
+                  {app.photoUrl ? (
+                    // Cloudinary URL — next/image would need the host allow-listed.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={app.photoUrl}
+                      alt=""
+                      className="h-12 w-10 shrink-0 rounded border border-neutral-200 object-cover"
+                    />
+                  ) : (
+                    <div className="h-12 w-10 shrink-0 rounded border border-dashed border-neutral-200 bg-neutral-50" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-900">{app.name}</p>
+                    <p className="truncate text-xs text-neutral-500">
+                      {app.programme} · Sem {app.semester} · Applied {formatDate(app.createdAt)}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge className={APPLICATION_STATUS_COLORS[app.status]}>
                     {APPLICATION_STATUS_LABELS[app.status]}
                   </Badge>
+                  {/* Always available: a Head needs to read the full
+                      application before deciding to shortlist, not after. */}
+                  <Link href={`/department/applicants/${app.id}`}>
+                    <Button size="sm" variant="ghost">
+                      View full
+                    </Button>
+                  </Link>
                   {app.status === "SUBMITTED" && (
                     <Button size="sm" variant="outline" onClick={() => moveToReview(app)}>
                       Start Review
