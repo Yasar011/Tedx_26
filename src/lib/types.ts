@@ -118,6 +118,9 @@ export interface Interview {
    *  withdraws the application — they can't turn up unconfirmed. */
   applicantAccepted?: boolean | null;
   applicantRespondedAt?: number | null;
+  /** Whether they actually turned up, marked by the interviewer.
+   *  null = not recorded yet, false = no-show. */
+  attended?: boolean | null;
   notes: string;
   ratings: InterviewRatings | null;
   recommendation: Recommendation | null;

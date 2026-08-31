@@ -188,7 +188,8 @@ service cloud.firestore {
 
       allow update: if (isDeptHead() &&
           resource.data.departmentId == myDepartmentId() &&
-          onlyFieldsChanged(['notes', 'ratings', 'recommendation', 'submittedAt'])) ||
+          onlyFieldsChanged(['notes', 'ratings', 'recommendation', 'submittedAt',
+            'scheduledAt', 'attended', 'applicantAccepted', 'applicantRespondedAt'])) ||
         (isCore() && onlyFieldsChanged(['coreDecision'])) ||
         // The applicant confirming or declining their own slot. They can
         // only touch those two fields — never the ratings, the notes or

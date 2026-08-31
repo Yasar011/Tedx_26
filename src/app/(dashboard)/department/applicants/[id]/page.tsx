@@ -191,6 +191,26 @@ export default function InterviewDetailPage() {
     }
   }
 
+  async function markAttendance(attended: boolean) {
+    if (!interview || !profile || !application) return;
+    try {
+      await updateDoc(doc(db, "interviews", interview.id), { attended });
+      setInterview({ ...interview, attended });
+      await logActivity({
+        actorId: profile.uid,
+        actorName: profile.name,
+        action: attended ? "INTERVIEW_ATTENDED" : "INTERVIEW_NO_SHOW",
+        targetType: "application",
+        targetId: application.id,
+        message: `${application.name} was marked ${attended ? "attended" : "a no-show"} by ${profile.name}`,
+        departmentId: profile.departmentId,
+      });
+      toast.success(attended ? "Marked as attended" : "Marked as no-show");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save attendance");
+    }
+  }
+
   async function submitRecommendation() {
     if (!application || !profile || !interview) return;
     setSaving(true);
@@ -347,6 +367,36 @@ export default function InterviewDetailPage() {
                 </p>
               </div>
             )}
+            {/* Recorded separately from the rating, so a no-show is a fact
+                on file rather than an interview that simply never got
+                scored. Feeds the Interviews report. */}
+            {!readOnly && (
+              <div className="rounded-lg border border-neutral-200 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                  Did they attend?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant={interview.attended === true ? "primary" : "outline"}
+                    onClick={() => markAttendance(true)}
+                  >
+                    Attended
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={interview.attended === false ? "danger" : "outline"}
+                    onClick={() => markAttendance(false)}
+                  >
+                    No-show
+                  </Button>
+                  {interview.attended == null && (
+                    <span className="self-center text-xs text-neutral-500">Not recorded yet</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {RATING_FIELDS.map((field) => (
                 <FormField key={field} label={field.charAt(0).toUpperCase() + field.slice(1)}>

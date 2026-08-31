@@ -12,6 +12,7 @@ import {
 import { db } from "@/lib/firebase/client";
 import {
   ActivityLog,
+  Interview,
   Application,
   ApplicationStatus,
   Department,
@@ -23,8 +24,9 @@ import { Select } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { formatDateTime } from "@/lib/utils";
 import { APPLICATION_STATUS_LABELS } from "@/lib/constants";
+import { getEmailQuota } from "@/lib/email";
 
-type Tab = "recruitment" | "department" | "activity";
+type Tab = "recruitment" | "interviews" | "department" | "activity";
 
 export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>("recruitment");
@@ -37,7 +39,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="flex gap-2">
-        {(["recruitment", "department", "activity"] as Tab[]).map((t) => (
+        {(["recruitment", "interviews", "department", "activity"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -49,6 +51,7 @@ export default function ReportsPage() {
       </div>
 
       {tab === "recruitment" && <RecruitmentReport />}
+      {tab === "interviews" && <InterviewReport />}
       {tab === "department" && <DepartmentReport />}
       {tab === "activity" && <ActivityReport />}
     </div>
@@ -115,6 +118,75 @@ function RecruitmentReport() {
               <span className="font-semibold text-neutral-900">{d.count}</span>
             </div>
           ))}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function InterviewReport() {
+  const [loading, setLoading] = useState(true);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [quota, setQuota] = useState<number | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const snap = await getDocs(collection(db, "interviews"));
+      setInterviews(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Interview)));
+      setLoading(false);
+    })();
+    getEmailQuota().then(setQuota);
+  }, []);
+
+  if (loading) return <FullPageSpinner />;
+
+  const scheduled = interviews.filter((i) => i.scheduledAt);
+  const confirmed = scheduled.filter((i) => i.applicantAccepted === true);
+  const declined = scheduled.filter((i) => i.applicantAccepted === false);
+  const awaiting = scheduled.filter((i) => i.applicantAccepted == null);
+  const attended = scheduled.filter((i) => i.attended === true);
+  const noShow = scheduled.filter((i) => i.attended === false);
+  const unrecorded = scheduled.filter((i) => i.attended == null);
+  const assessed = interviews.filter((i) => i.submittedAt);
+
+  const stats = [
+    { label: "Interviews scheduled", value: scheduled.length, tone: "" },
+    { label: "Confirmed by applicant", value: confirmed.length, tone: "text-emerald-700" },
+    { label: "Awaiting confirmation", value: awaiting.length, tone: "text-amber-700" },
+    { label: "Declined the slot", value: declined.length, tone: "text-red-700" },
+    { label: "Attended", value: attended.length, tone: "text-emerald-700" },
+    { label: "No-shows", value: noShow.length, tone: "text-red-700" },
+    { label: "Attendance not recorded", value: unrecorded.length, tone: "text-neutral-500" },
+    { label: "Assessed & sent to Core", value: assessed.length, tone: "" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {stats.map((s) => (
+          <Card key={s.label}>
+            <CardContent className="py-5">
+              <p className={`text-2xl font-bold ${s.tone || "text-neutral-900"}`}>{s.value}</p>
+              <p className="text-xs text-neutral-500">{s.label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle>Applicant emails</CardTitle></CardHeader>
+        <CardContent className="space-y-2 text-sm text-neutral-700">
+          <p>
+            {quota === null
+              ? "The email relay isn't reachable right now."
+              : `${quota} sends left today.`}
+          </p>
+          {/* Every send is written to the Sheet by the Apps Script, which is
+              the authoritative record — the app never stores a copy. */}
+          <p className="text-neutral-500">
+            A full log of every email — who it went to, the subject and whether it
+            sent — is written to your Google Sheet.
+          </p>
         </CardContent>
       </Card>
     </div>
