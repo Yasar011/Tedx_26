@@ -387,58 +387,70 @@ export default function DepartmentApplicantsPage() {
         <div className="space-y-3">
           {filtered.map((app) => (
             <Card key={app.id}>
-              <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
-                <div className="flex min-w-0 items-center gap-3">
-                  {app.photoUrl ? (
-                    // Cloudinary URL — next/image would need the host allow-listed.
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={app.photoUrl}
-                      alt=""
-                      className="h-12 w-10 shrink-0 rounded border border-neutral-200 object-cover"
-                    />
-                  ) : (
-                    <div className="h-12 w-10 shrink-0 rounded border border-dashed border-neutral-200 bg-neutral-50" />
-                  )}
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-900">{app.name}</p>
-                    <p className="truncate text-xs text-neutral-500">
-                      {app.programme} · Sem {app.semester} · Applied {formatDate(app.createdAt)}
-                    </p>
+              <CardContent className="py-4">
+                {/* Identity and status on their own line; actions below on a
+                    separate row. Previously every control shared one strip
+                    with the badge, which crowded them and read as a single
+                    undifferentiated blob. */}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {app.photoUrl ? (
+                      // Cloudinary URL — next/image would need the host allow-listed.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={app.photoUrl}
+                        alt=""
+                        className="h-12 w-10 shrink-0 rounded border border-neutral-200 object-cover"
+                      />
+                    ) : (
+                      <div className="h-12 w-10 shrink-0 rounded border border-dashed border-neutral-200 bg-neutral-50" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-neutral-900">{app.name}</p>
+                      <p className="truncate text-xs text-neutral-500">
+                        {app.programme} · Sem {app.semester} · Applied {formatDate(app.createdAt)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
                   <Badge className={APPLICATION_STATUS_COLORS[app.status]}>
                     {APPLICATION_STATUS_LABELS[app.status]}
                   </Badge>
-                  {/* Always available: a Head needs to read the full
-                      application before deciding to shortlist, not after. */}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3">
+                  {/* One link to the application, not two. It doubles as the
+                      way into the interview once they're shortlisted. */}
                   <Link href={`/department/applicants/${app.id}`}>
-                    <Button size="sm" variant="ghost">
-                      View full
+                    <Button size="sm" variant="outline">
+                      {app.status === "SHORTLISTED" ? "Interview" : "View full"}
                     </Button>
                   </Link>
+
                   {app.status === "SUBMITTED" && (
-                    <Button size="sm" variant="outline" onClick={() => moveToReview(app)}>
+                    <Button size="sm" variant="ghost" onClick={() => moveToReview(app)}>
                       Start Review
                     </Button>
                   )}
+
                   {(app.status === "UNDER_REVIEW" || app.status === "SUBMITTED") && (
                     <Button size="sm" onClick={() => shortlist(app)}>
                       Shortlist
                     </Button>
                   )}
 
-                  {/* Available up to the point Core/Admin take over the
-                      decision, so a Head isn't forced to interview someone
-                      just to decline them. */}
-                  {["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEW_COMPLETED"].includes(
-                    app.status
-                  ) && (
-                    <>
+                  {/* Turning someone down sits apart from the forward-moving
+                      actions, so it can't be hit by reflex. */}
+                  {[
+                    "SUBMITTED",
+                    "UNDER_REVIEW",
+                    "SHORTLISTED",
+                    "INTERVIEW_SCHEDULED",
+                    "INTERVIEW_COMPLETED",
+                  ].includes(app.status) && (
+                    <div className="ml-auto flex items-center gap-2">
                       <Button
                         size="sm"
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => setPendingDecision({ app, outcome: "WAITLISTED" })}
                       >
                         Waitlist
@@ -450,20 +462,7 @@ export default function DepartmentApplicantsPage() {
                       >
                         Reject
                       </Button>
-                    </>
-                  )}
-                  {(app.status === "SHORTLISTED" ||
-                    app.status === "INTERVIEW_SCHEDULED" ||
-                    app.status === "INTERVIEW_COMPLETED" ||
-                    app.status === "CORE_REVIEW" ||
-                    app.status === "APPROVED" ||
-                    app.status === "REJECTED" ||
-                    app.status === "WAITLISTED") && (
-                    <Link href={`/department/applicants/${app.id}`}>
-                      <Button size="sm" variant="outline">
-                        {app.status === "SHORTLISTED" ? "Interview" : "View"}
-                      </Button>
-                    </Link>
+                    </div>
                   )}
                 </div>
               </CardContent>
