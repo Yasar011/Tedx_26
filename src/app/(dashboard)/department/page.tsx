@@ -83,9 +83,40 @@ export default function DepartmentPage() {
         getDocs(query(collection(db, "users"), where("departmentId", "==", viewingId))),
         getDocs(query(collection(db, "tasks"), where("departmentId", "==", viewingId))),
       ]);
-      setTeam(teamSnap.docs.map((d) => d.data() as UserProfile));
+      const members = teamSnap.docs.map((d) => d.data() as UserProfile);
+      setTeam(members);
       setTasks(taskSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Task)));
       setLoading(false);
+
+      // Self-heal the denormalised lead names. Applicants can't read user
+      // profiles, so the agreement step relies entirely on these fields —
+      // if they're missing it tells applicants "no Head assigned" even when
+      // one clearly exists. Backfills silently when someone with access
+      // opens the page.
+      if (deptSnap.exists()) {
+        const dept = { id: deptSnap.id, ...deptSnap.data() } as Department;
+        const lead =
+          members.find((m) => m.role === "department_head") ??
+          members.find((m) => m.role === "admin" || m.role === "core");
+        const coLead = members.find((m) => m.isCoHead && m.uid !== lead?.uid);
+
+        const patch: Record<string, unknown> = {};
+        if (lead && dept.headName !== lead.name) {
+          patch.headName = lead.name;
+          patch.headUserId = lead.uid;
+        }
+        if ((coLead?.name ?? null) !== (dept.coHeadName ?? null)) {
+          patch.coHeadName = coLead?.name ?? null;
+        }
+        if (Object.keys(patch).length > 0) {
+          try {
+            await updateDoc(doc(db, "departments", viewingId), patch);
+            setDepartment({ ...dept, ...patch } as Department);
+          } catch {
+            /* non-fatal: only Admin/Head can write, and the page still renders */
+          }
+        }
+      }
     })();
   }, [profile, viewingId]);
 

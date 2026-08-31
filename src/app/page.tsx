@@ -223,12 +223,43 @@ export default function Home() {
             </p>
           </Reveal>
 
-          <div className="mt-12 flex flex-wrap justify-center gap-3">
+          {/* Head and Co-Head are denormalised onto the department document,
+              so they're readable here without exposing the users collection
+              publicly. */}
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {openDepartments.map((d, i) => (
-              <Reveal key={d.id} delay={Math.min(i * 60, 360)} as="span">
-                <span className="inline-block rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-neutral-200 transition-colors hover:border-[#EB0028]/50 hover:text-white">
-                  {d.name}
-                </span>
+              <Reveal key={d.id} delay={Math.min(i * 70, 420)}>
+                <div className="group h-full rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-[#EB0028]/40 hover:bg-white/[0.06]">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="font-semibold leading-snug text-white">{d.name}</h3>
+                    <span className="shrink-0 rounded-full bg-[#EB0028]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#EB0028]">
+                      {d.code}
+                    </span>
+                  </div>
+
+                  {d.description && (
+                    <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-neutral-400">
+                      {d.description}
+                    </p>
+                  )}
+
+                  <div className="mt-4 space-y-1 border-t border-white/10 pt-3 text-xs">
+                    <p className="text-neutral-400">
+                      <span className="text-neutral-500">Head: </span>
+                      {d.headName ? (
+                        <span className="text-neutral-200">{d.headName}</span>
+                      ) : (
+                        <span className="text-neutral-600">to be announced</span>
+                      )}
+                    </p>
+                    {d.coHeadName && (
+                      <p className="text-neutral-400">
+                        <span className="text-neutral-500">Co-Head: </span>
+                        <span className="text-neutral-200">{d.coHeadName}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
               </Reveal>
             ))}
           </div>

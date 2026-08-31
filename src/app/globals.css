@@ -223,3 +223,46 @@ body {
     animation: none !important;
   }
 }
+
+/* ---------------------------------------------------------------
+   Print / Save-as-PDF.
+   Used by the "Download PDF" action on an application, which calls
+   window.print() rather than bundling a PDF library. Strips the app
+   chrome so the sheet is just the applicant's details.
+   --------------------------------------------------------------- */
+@media print {
+  /* Sidebar, topbar and anything explicitly marked. */
+  aside,
+  header,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Let the content use the full page instead of the scroll pane. */
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Keep each card whole rather than split across a page break. */
+  .rounded-xl {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+  }
+
+  /* Photos print at their real size and aren't dropped by the browser. */
+  img {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  a[href]:after {
+    content: "";
+  }
+}

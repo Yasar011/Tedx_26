@@ -55,13 +55,23 @@ export default function AdminTeamPage() {
 
   async function setDepartment(user: UserProfile, departmentId: string) {
     await updateDoc(doc(db, "users", user.uid), { departmentId: departmentId || null });
-    if (departmentId && user.role === "department_head") {
+    if (departmentId) {
       // headName is denormalised because applicants can't read other users'
       // profiles, but do need to see who runs a department before agreeing.
-      await updateDoc(doc(db, "departments", departmentId), {
-        headUserId: user.uid,
-        headName: user.name,
-      });
+      // A Department Head always claims the slot; an Admin/Core member who
+      // also holds the department claims it only when nobody else has, so
+      // adding an admin to a team can't displace its real Head.
+      const target = departments.find((d) => d.id === departmentId);
+      const claimsHeadSlot =
+        user.role === "department_head" ||
+        ((user.role === "admin" || user.role === "core") && !target?.headUserId);
+
+      if (claimsHeadSlot) {
+        await updateDoc(doc(db, "departments", departmentId), {
+          headUserId: user.uid,
+          headName: user.name,
+        });
+      }
     }
     if (user.departmentId && user.departmentId !== departmentId) {
       await clearStaleDenormalisedNames(user);
