@@ -28,6 +28,8 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   APPROVED: "Approved",
   REJECTED: "Rejected",
   WAITLISTED: "Waitlisted",
+  SECOND_PREFERENCE_OFFERED: "Second Choice Offered",
+  WITHDRAWN: "Withdrawn",
 };
 
 export const APPLICATION_STATUS_COLORS: Record<ApplicationStatus, string> = {
@@ -40,6 +42,8 @@ export const APPLICATION_STATUS_COLORS: Record<ApplicationStatus, string> = {
   APPROVED: "bg-emerald-100 text-emerald-700",
   REJECTED: "bg-red-100 text-red-700",
   WAITLISTED: "bg-yellow-100 text-yellow-700",
+  SECOND_PREFERENCE_OFFERED: "bg-orange-100 text-orange-700",
+  WITHDRAWN: "bg-neutral-200 text-neutral-600",
 };
 
 export const ROLE_LABELS: Record<Role, string> = {

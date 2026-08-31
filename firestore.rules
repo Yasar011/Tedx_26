@@ -127,11 +127,31 @@ service cloud.firestore {
       // final decision and the TEDx Member ID.
       allow update: if isDeptHead() &&
         resource.data.departmentPreference == myDepartmentName() &&
-        onlyFieldsChanged(['status', 'updatedAt', 'reviewedBy', 'reviewedByName']) &&
+        onlyFieldsChanged(['status', 'updatedAt', 'reviewedBy', 'reviewedByName',
+          'rejectedByDepartment']) &&
         request.resource.data.status in [
           'UNDER_REVIEW', 'SHORTLISTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED',
-          'CORE_REVIEW', 'REJECTED', 'WAITLISTED'
+          'CORE_REVIEW', 'REJECTED', 'WAITLISTED', 'SECOND_PREFERENCE_OFFERED'
         ];
+
+      // The applicant answering a second-choice offer. Deliberately narrow:
+      // only from SECOND_PREFERENCE_OFFERED, only to those two outcomes, and
+      // when continuing, the new department must be exactly the second
+      // preference already recorded — so this can't be used to move into an
+      // arbitrary department or to advance their own status.
+      allow update: if isSignedIn() &&
+        resource.data.applicantUserId == request.auth.uid &&
+        resource.data.status == 'SECOND_PREFERENCE_OFFERED' &&
+        onlyFieldsChanged([
+          'status', 'departmentPreference', 'departmentPreference2',
+          'movedToSecond', 'updatedAt'
+        ]) && (
+          (request.resource.data.status == 'WITHDRAWN' &&
+            request.resource.data.departmentPreference == resource.data.departmentPreference) ||
+          (request.resource.data.status == 'SUBMITTED' &&
+            request.resource.data.departmentPreference == resource.data.departmentPreference2 &&
+            request.resource.data.movedToSecond == true)
+        );
 
       // Core/Admin make the final call.
       allow update: if isCore() &&

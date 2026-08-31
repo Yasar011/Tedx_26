@@ -104,6 +104,19 @@ export const applicantEmails = {
     };
   },
 
+  secondPreferenceOffered(name: string, rejectedBy: string, secondChoice: string) {
+    return {
+      subject: `Your second choice — ${EVENT}`,
+      heading: `One more option, ${name.split(" ")[0]}`,
+      message: `The ${rejectedBy} team wasn't able to take your application forward. You listed ${secondChoice} as your second preference, so we can pass your application to them instead — if you're still interested.`,
+      detail:
+        `Sign in and choose "Continue with ${secondChoice}" to send it on, or decline if you'd ` +
+        `rather not. Nothing changes until you decide.\n\n` +
+        `Please note the ${secondChoice} team will review your application and make their own ` +
+        `decision — this isn't a guaranteed place, it puts you back in the running with them.`,
+    };
+  },
+
   waitlisted(name: string, department: string) {
     return {
       subject: `You're on the waitlist — ${EVENT}`,

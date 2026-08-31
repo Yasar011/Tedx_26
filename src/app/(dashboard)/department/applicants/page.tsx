@@ -139,28 +139,52 @@ export default function DepartmentApplicantsPage() {
   async function decideEarly(app: Application, outcome: "REJECTED" | "WAITLISTED") {
     setDecidingId(app.id);
     try {
+      // A rejection isn't final while the applicant still has an untried
+      // second preference — the application is offered to that department
+      // instead, and the applicant decides whether to continue. Only once
+      // they've already been rolled over (movedToSecond) is it terminal.
+      const rollsOverToSecond =
+        outcome === "REJECTED" && !!app.departmentPreference2 && !app.movedToSecond;
+
+      const nextStatus = rollsOverToSecond ? "SECOND_PREFERENCE_OFFERED" : outcome;
+
       await updateDoc(doc(db, "applications", app.id), {
-        status: outcome,
+        status: nextStatus,
+        rejectedByDepartment: outcome === "REJECTED" ? app.departmentPreference : null,
         updatedAt: Date.now(),
         reviewedBy: profile!.uid,
         reviewedByName: profile!.name,
       });
+
       await logActivity({
         actorId: profile!.uid,
         actorName: profile!.name,
-        action: `APPLICATION_${outcome}`,
+        action: rollsOverToSecond ? "APPLICATION_OFFERED_SECOND" : `APPLICATION_${outcome}`,
         targetType: "application",
         targetId: app.id,
-        message: `${app.name} marked ${outcome.toLowerCase()} by ${profile!.name}${
-          rejectNote ? `: ${rejectNote}` : ""
-        }`,
+        message: rollsOverToSecond
+          ? `${app.name} was turned down by ${app.departmentPreference} and offered their second choice, ${app.departmentPreference2}`
+          : `${app.name} marked ${outcome.toLowerCase()} by ${profile!.name}${
+              rejectNote ? `: ${rejectNote}` : ""
+            }`,
         departmentId: profile!.departmentId,
       });
-      toast.success(`${app.name} marked ${outcome.toLowerCase()}`);
+
+      toast.success(
+        rollsOverToSecond
+          ? `${app.name} offered their second choice (${app.departmentPreference2})`
+          : `${app.name} marked ${outcome.toLowerCase()}`
+      );
 
       await notifyApplicant(
         app.email,
-        outcome === "REJECTED"
+        rollsOverToSecond
+          ? applicantEmails.secondPreferenceOffered(
+              app.name,
+              app.departmentPreference,
+              app.departmentPreference2
+            )
+          : outcome === "REJECTED"
           ? applicantEmails.rejected(app.name, app.departmentPreference, rejectNote)
           : applicantEmails.waitlisted(app.name, app.departmentPreference)
       );
@@ -346,11 +370,32 @@ export default function DepartmentApplicantsPage() {
             : `Waitlist ${pendingDecision?.app.name}?`
         }
       >
-        <p className="text-sm text-neutral-600">
-          {pendingDecision?.outcome === "REJECTED"
-            ? "They'll be told their application wasn't successful, by email."
-            : "They'll be told they're on the waitlist, by email."}
-        </p>
+        {(() => {
+          if (pendingDecision?.outcome === "WAITLISTED") {
+            return (
+              <p className="text-sm text-neutral-600">
+                They&apos;ll be told they&apos;re on the waitlist, by email.
+              </p>
+            );
+          }
+          const rollsOver =
+            !!pendingDecision?.app.departmentPreference2 && !pendingDecision?.app.movedToSecond;
+          return rollsOver ? (
+            <p className="rounded-lg border border-orange-200 bg-orange-50 p-3 text-sm text-orange-800">
+              They listed <strong>{pendingDecision?.app.departmentPreference2}</strong> as their
+              second choice, so this won&apos;t reject them outright — they&apos;ll be emailed and
+              asked whether they want to continue with that team. If they decline, the
+              application is withdrawn.
+            </p>
+          ) : (
+            <p className="text-sm text-neutral-600">
+              {pendingDecision?.app.movedToSecond
+                ? "This was already their second choice, so rejecting is final."
+                : "They listed no second preference, so rejecting is final."}{" "}
+              They&apos;ll be told by email.
+            </p>
+          );
+        })()}
 
         {pendingDecision?.outcome === "REJECTED" && (
           <div className="mt-4">

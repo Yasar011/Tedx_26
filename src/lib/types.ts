@@ -15,7 +15,12 @@ export type ApplicationStatus =
   | "CORE_REVIEW"
   | "APPROVED"
   | "REJECTED"
-  | "WAITLISTED";
+  | "WAITLISTED"
+  /** Turned down by their first choice, offered their second. Waiting on
+   *  the applicant to accept or decline. */
+  | "SECOND_PREFERENCE_OFFERED"
+  /** The applicant declined the second-choice offer themselves. */
+  | "WITHDRAWN";
 
 export type Recommendation = "SELECT" | "REJECT" | "WAITLIST";
 
@@ -82,6 +87,11 @@ export interface Application {
   agreedToDepartment1?: boolean;
   agreedToDepartment2?: boolean;
   agreedAt?: number | null;
+  /** Set once the applicant has been rolled over to their second choice, so
+   *  a second rejection is terminal rather than looping. */
+  movedToSecond?: boolean;
+  /** The department that turned them down first, kept for context. */
+  rejectedByDepartment?: string | null;
   createdAt: number;
   updatedAt: number;
   reviewedBy?: string | null;

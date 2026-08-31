@@ -189,6 +189,42 @@ export default function CommandCenterPage() {
         </Card>
 
         <Card>
+          <CardHeader><CardTitle>Applications by Department</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {deptHealth.length === 0 && (
+              <p className="text-sm text-neutral-500">No departments configured yet.</p>
+            )}
+            {/* Ranked, so the busiest and the neglected teams are both
+                obvious at a glance. */}
+            {[...deptHealth]
+              .sort((a, b) => b.total - a.total)
+              .map(({ department, total }, i) => {
+                const busiest = Math.max(...deptHealth.map((d) => d.total), 1);
+                const pct = Math.round((total / busiest) * 100);
+                return (
+                  <div key={department.id}>
+                    <div className="mb-1 flex items-center justify-between text-sm">
+                      <span className="font-medium text-neutral-800">
+                        {i === 0 && total > 0 && "🥇 "}
+                        {department.name}
+                      </span>
+                      <span className="text-neutral-500">
+                        {total} application{total !== 1 && "s"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className={i === 0 && total > 0 ? "h-full bg-[#EB0028]" : "h-full bg-neutral-400"}
+                        style={{ width: `${total === 0 ? 0 : Math.max(pct, 4)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+          </CardContent>
+        </Card>
+
+        <Card>
           <CardHeader><CardTitle>Department Health (Tasks)</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {deptTaskHealth.length === 0 && <p className="text-sm text-neutral-500">No departments configured yet.</p>}
