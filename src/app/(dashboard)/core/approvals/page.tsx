@@ -153,7 +153,7 @@ export default function ApprovalCenterPage() {
         toast.success(`${row.application.name} approved — ${tedxId}`);
         await notifyApplicant(
           row.application.email,
-          applicantEmails.approved(row.application.name, dept.name, tedxId)
+          applicantEmails.approved(row.application.name, dept.name, tedxId, profile.name)
         );
       } else {
         const statusMap = {

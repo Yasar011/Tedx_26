@@ -68,10 +68,14 @@ export function senderTitleFor(
   role: string | undefined,
   departmentName?: string | null
 ): string {
+  // Acting for one department — a Head, or an Admin/Core member working
+  // inside a specific team's applicant list.
   if (departmentName && (role === "department_head" || role === "admin" || role === "core")) {
     return `Head of ${departmentName}, ${EVENT}`;
   }
-  if (role === "admin" || role === "core") return `Organising Team, ${EVENT}`;
+  // Acting org-wide, e.g. issuing a TEDx ID from the Approval Center.
+  if (role === "admin") return `Organising Head, ${EVENT}`;
+  if (role === "core") return `Core Organising Team, ${EVENT}`;
   return EVENT;
 }
 
@@ -109,12 +113,15 @@ export const applicantEmails = {
     };
   },
 
-  approved(name: string, department: string, tedxId: string) {
+  approved(name: string, department: string, tedxId: string, approvedBy?: string) {
     return {
       subject: `Welcome to the team — ${EVENT}`,
       heading: `You're in, ${name.split(" ")[0]}!`,
-      message: `You've been selected to join the ${department} team for ${EVENT}. Sign in to see your dashboard, your department and your first tasks.`,
-      detail: `Your TEDx Member ID: ${tedxId}`,
+      message:
+        `Your application has been approved${approvedBy ? ` by ${approvedBy}` : ""}, and ` +
+        `you're joining the ${department} team for ${EVENT}. Sign in to see your dashboard, ` +
+        `your department and your first tasks.`,
+      detail: `Your TEDx Member ID: ${tedxId}\nDepartment: ${department}`,
     };
   },
 
