@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { isNiftEmail, NIFT_EMAIL_DOMAIN } from "@/lib/validation";
+import { ROLE_LABELS } from "@/lib/constants";
 import {
   addDoc,
   collection,
@@ -242,6 +243,34 @@ export default function ApplyPage() {
             <Link href="/login?next=/apply">
               <Button className="mt-6 w-full">Sign in or create an account</Button>
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Anyone already on the team shouldn't see an application form. This also
+  // catches a stale "?next=/apply" carried over from an earlier visit, which
+  // would otherwise drop an Admin onto the form straight after signing in.
+  const alreadyOnTeam =
+    profile != null && profile.role !== "unassigned" && profile.role !== "applicant";
+
+  if (alreadyOnTeam) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="py-10">
+            <Logo priority className="mx-auto mb-4 h-10 w-auto" />
+            <h1 className="text-lg font-semibold text-neutral-900">
+              You&apos;re already on the team
+            </h1>
+            <p className="mt-2 text-sm text-neutral-500">
+              You&apos;re signed in as {ROLE_LABELS[profile.role]}, so there&apos;s nothing to
+              apply for.
+            </p>
+            <Button className="mt-6" onClick={() => router.replace("/dashboard")}>
+              Go to my dashboard
+            </Button>
           </CardContent>
         </Card>
       </div>
