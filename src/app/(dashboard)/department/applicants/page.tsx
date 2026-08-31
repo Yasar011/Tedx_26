@@ -7,7 +7,8 @@ import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Application, Department } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/Card";
-import { Select } from "@/components/ui/Input";
+import { Select, FormField, Textarea } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
@@ -29,6 +30,14 @@ export default function DepartmentApplicantsPage() {
   const canBrowseAll = profile?.role === "admin" || profile?.role === "core";
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Rejection is confirmed rather than one-click: it emails the applicant
+  // and is not something to trigger by mis-tapping on a phone.
+  const [pendingDecision, setPendingDecision] = useState<{
+    app: Application;
+    outcome: "REJECTED" | "WAITLISTED";
+  } | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
   async function load() {
     if (!profile) return;
@@ -116,6 +125,51 @@ export default function DepartmentApplicantsPage() {
       toast.error("Today's 100-email limit is used up — tell this applicant directly.");
     } else {
       toast.error(`Status saved, but the email didn't send: ${result.error ?? "unknown"}`);
+    }
+  }
+
+  /**
+   * Turns an applicant down without an interview.
+   *
+   * Approve is intentionally NOT available here — only an Admin issues the
+   * final decision and the TEDx ID — but rejecting early has to be possible,
+   * otherwise an obviously unsuitable applicant has to be marched through a
+   * whole interview cycle before they can be declined.
+   */
+  async function decideEarly(app: Application, outcome: "REJECTED" | "WAITLISTED") {
+    setDecidingId(app.id);
+    try {
+      await updateDoc(doc(db, "applications", app.id), {
+        status: outcome,
+        updatedAt: Date.now(),
+        reviewedBy: profile!.uid,
+        reviewedByName: profile!.name,
+      });
+      await logActivity({
+        actorId: profile!.uid,
+        actorName: profile!.name,
+        action: `APPLICATION_${outcome}`,
+        targetType: "application",
+        targetId: app.id,
+        message: `${app.name} marked ${outcome.toLowerCase()} by ${profile!.name}${
+          rejectNote ? `: ${rejectNote}` : ""
+        }`,
+        departmentId: profile!.departmentId,
+      });
+      toast.success(`${app.name} marked ${outcome.toLowerCase()}`);
+
+      await notifyApplicant(
+        app.email,
+        outcome === "REJECTED"
+          ? applicantEmails.rejected(app.name, app.departmentPreference, rejectNote)
+          : applicantEmails.waitlisted(app.name, app.departmentPreference)
+      );
+
+      setPendingDecision(null);
+      setRejectNote("");
+      load();
+    } finally {
+      setDecidingId(null);
     }
   }
 
@@ -236,6 +290,30 @@ export default function DepartmentApplicantsPage() {
                       Shortlist
                     </Button>
                   )}
+
+                  {/* Available up to the point Core/Admin take over the
+                      decision, so a Head isn't forced to interview someone
+                      just to decline them. */}
+                  {["SUBMITTED", "UNDER_REVIEW", "SHORTLISTED", "INTERVIEW_SCHEDULED", "INTERVIEW_COMPLETED"].includes(
+                    app.status
+                  ) && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPendingDecision({ app, outcome: "WAITLISTED" })}
+                      >
+                        Waitlist
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => setPendingDecision({ app, outcome: "REJECTED" })}
+                      >
+                        Reject
+                      </Button>
+                    </>
+                  )}
                   {(app.status === "SHORTLISTED" ||
                     app.status === "INTERVIEW_SCHEDULED" ||
                     app.status === "INTERVIEW_COMPLETED" ||
@@ -255,6 +333,63 @@ export default function DepartmentApplicantsPage() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={!!pendingDecision}
+        onClose={() => {
+          setPendingDecision(null);
+          setRejectNote("");
+        }}
+        title={
+          pendingDecision?.outcome === "REJECTED"
+            ? `Reject ${pendingDecision.app.name}?`
+            : `Waitlist ${pendingDecision?.app.name}?`
+        }
+      >
+        <p className="text-sm text-neutral-600">
+          {pendingDecision?.outcome === "REJECTED"
+            ? "They'll be told their application wasn't successful, by email."
+            : "They'll be told they're on the waitlist, by email."}
+        </p>
+
+        {pendingDecision?.outcome === "REJECTED" && (
+          <div className="mt-4">
+            <FormField
+              label="Feedback (optional)"
+              hint="Included in the email. A line of genuine feedback goes a long way."
+            >
+              <Textarea
+                rows={3}
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+              />
+            </FormField>
+          </div>
+        )}
+
+        <div className="mt-5 flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => {
+              setPendingDecision(null);
+              setRejectNote("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            className="flex-1"
+            variant={pendingDecision?.outcome === "REJECTED" ? "danger" : "primary"}
+            loading={decidingId === pendingDecision?.app.id}
+            onClick={() =>
+              pendingDecision && decideEarly(pendingDecision.app, pendingDecision.outcome)
+            }
+          >
+            {pendingDecision?.outcome === "REJECTED" ? "Reject" : "Waitlist"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
