@@ -85,7 +85,7 @@ export async function POST(req: Request) {
     return NextResponse.json(data);
   }
 
-  const { to, subject, heading, message, detail } = body;
+  const { to, subject, heading, message, detail, senderName, senderTitle } = body;
   if (!to || !subject) {
     return NextResponse.json(
       { ok: false, error: "Missing recipient or subject" },
@@ -96,7 +96,9 @@ export async function POST(req: Request) {
   const res = await fetch(scriptUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ secret, to, subject, heading, message, detail }),
+    body: JSON.stringify({
+      secret, to, subject, heading, message, detail, senderName, senderTitle,
+    }),
   });
 
   const data = await res.json().catch(() => ({ ok: false, error: "Relay error" }));

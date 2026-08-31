@@ -16,7 +16,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
-import { sendApplicantEmail, applicantEmails } from "@/lib/email";
+import { sendApplicantEmail, applicantEmails, senderTitleFor } from "@/lib/email";
 import { Users, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -114,7 +114,12 @@ export default function DepartmentApplicantsPage() {
     to: string,
     content: { subject: string; heading: string; message: string; detail?: string }
   ) {
-    const result = await sendApplicantEmail({ to, ...content });
+    const result = await sendApplicantEmail({
+      to,
+      ...content,
+      senderName: profile?.name,
+      senderTitle: senderTitleFor(profile?.role, department?.name),
+    });
     if (result.ok) {
       if (typeof result.remaining === "number" && result.remaining <= 10) {
         toast.warning(`Email sent — only ${result.remaining} left in today's quota`);

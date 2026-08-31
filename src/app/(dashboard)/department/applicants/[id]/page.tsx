@@ -23,7 +23,7 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
-import { sendApplicantEmail, applicantEmails } from "@/lib/email";
+import { sendApplicantEmail, applicantEmails, senderTitleFor } from "@/lib/email";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -117,6 +117,8 @@ export default function InterviewDetailPage() {
       // they won't necessarily be signed in when it's set.
       const mail = await sendApplicantEmail({
         to: application.email,
+        senderName: profile.name,
+        senderTitle: senderTitleFor(profile.role, application.departmentPreference),
         ...applicantEmails.interviewScheduled(
           application.name,
           application.departmentPreference,

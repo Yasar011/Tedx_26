@@ -21,6 +21,9 @@ export async function sendApplicantEmail(params: {
   heading: string;
   message: string;
   detail?: string;
+  /** Who acted, shown as a signature so the mail isn't faceless. */
+  senderName?: string;
+  senderTitle?: string;
 }): Promise<SendResult> {
   try {
     const idToken = await auth.currentUser?.getIdToken();
@@ -55,6 +58,22 @@ export async function getEmailQuota(): Promise<number | null> {
 }
 
 const EVENT = "TEDxNIFT Jodhpur";
+
+/**
+ * How the sender is described at the foot of an applicant email.
+ * A Head signs as the head of their department; org leadership signs for
+ * the organising team.
+ */
+export function senderTitleFor(
+  role: string | undefined,
+  departmentName?: string | null
+): string {
+  if (departmentName && (role === "department_head" || role === "admin" || role === "core")) {
+    return `Head of ${departmentName}, ${EVENT}`;
+  }
+  if (role === "admin" || role === "core") return `Organising Team, ${EVENT}`;
+  return EVENT;
+}
 
 export const applicantEmails = {
   shortlisted(name: string, department: string) {

@@ -23,7 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { generateTedxId } from "@/lib/tedxId";
-import { sendApplicantEmail, applicantEmails, getEmailQuota } from "@/lib/email";
+import { sendApplicantEmail, applicantEmails, getEmailQuota, senderTitleFor } from "@/lib/email";
 import { toast } from "sonner";
 import { CheckSquare } from "lucide-react";
 
@@ -102,7 +102,12 @@ export default function ApprovalCenterPage() {
     to: string,
     content: { subject: string; heading: string; message: string; detail?: string }
   ) {
-    const result = await sendApplicantEmail({ to, ...content });
+    const result = await sendApplicantEmail({
+      to,
+      ...content,
+      senderName: profile?.name,
+      senderTitle: senderTitleFor(profile?.role, null),
+    });
     if (result.ok) {
       if (typeof result.remaining === "number") setQuota(result.remaining);
       return;
