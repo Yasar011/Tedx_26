@@ -220,7 +220,9 @@ export default function DepartmentApplicantsPage() {
   }
 
   const filtered = applications.filter((a) => {
-    const matchesSearch = a.name.toLowerCase().includes(search.toLowerCase());
+    const q = search.toLowerCase();
+    const matchesSearch =
+      a.name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q);
     const matchesStatus = statusFilter === "ALL" || a.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -252,7 +254,7 @@ export default function DepartmentApplicantsPage() {
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
           <input
-            placeholder="Search by name"
+            placeholder="Search name or email"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-9 rounded-lg border border-neutral-300 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#EB0028]/40"

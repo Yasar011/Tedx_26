@@ -139,6 +139,58 @@ export default function InterviewDetailPage() {
     }
   }
 
+  /**
+   * Moves an already-scheduled interview to a new time.
+   *
+   * Clears the applicant's confirmation: a "yes" to the old slot says
+   * nothing about the new one, so they're asked again rather than being
+   * assumed available.
+   */
+  async function rescheduleInterview() {
+    if (!application || !profile || !interview || !scheduledAt) return;
+    setSaving(true);
+    try {
+      const ts = new Date(scheduledAt).getTime();
+      await updateDoc(doc(db, "interviews", interview.id), {
+        scheduledAt: ts,
+        applicantAccepted: null,
+        applicantRespondedAt: null,
+      });
+      await logActivity({
+        actorId: profile.uid,
+        actorName: profile.name,
+        action: "INTERVIEW_RESCHEDULED",
+        targetType: "application",
+        targetId: application.id,
+        message: `${profile.name} moved ${application.name}'s interview to ${formatDateTime(ts)}`,
+        departmentId: profile.departmentId,
+      });
+
+      const mail = await sendApplicantEmail({
+        to: application.email,
+        senderName: profile.name,
+        senderTitle: senderTitleFor(profile.role, application.departmentPreference),
+        ...applicantEmails.interviewUpdated(
+          application.name,
+          application.departmentPreference,
+          ts
+        ),
+      });
+      if (!mail.ok) {
+        toast.error(
+          mail.error === "quota_exhausted"
+            ? "Time updated, but today's email limit is used up — tell them directly."
+            : `Time updated, but the email didn't send: ${mail.error ?? "unknown"}`
+        );
+      } else {
+        toast.success("Interview rescheduled");
+      }
+      load();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submitRecommendation() {
     if (!application || !profile || !interview) return;
     setSaving(true);
@@ -238,21 +290,34 @@ export default function InterviewDetailPage() {
         </CardContent>
       </Card>
 
-      {!interview && (
+      {/* Available before an interview exists AND after, so a time can be
+          changed — plans move, and previously the slot was locked once set. */}
+      {!readOnly && (
         <Card>
           <CardHeader>
-            <CardTitle>Schedule Interview</CardTitle>
+            <CardTitle>{interview ? "Reschedule Interview" : "Schedule Interview"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField label="Date & time">
+            <FormField
+              label="Date & time"
+              hint={
+                interview
+                  ? "Changing this re-notifies the applicant, and they'll need to confirm again."
+                  : undefined
+              }
+            >
               <Input
                 type="datetime-local"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
               />
             </FormField>
-            <Button onClick={scheduleInterview} loading={saving}>
-              Schedule Interview
+            <Button
+              onClick={interview ? rescheduleInterview : scheduleInterview}
+              loading={saving}
+              disabled={interview ? !scheduledAt : false}
+            >
+              {interview ? "Update time" : "Schedule Interview"}
             </Button>
           </CardContent>
         </Card>

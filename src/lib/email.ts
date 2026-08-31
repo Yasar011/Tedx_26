@@ -108,7 +108,7 @@ export const applicantEmails = {
     return {
       subject: `Your interview time has changed — ${EVENT}`,
       heading: `Updated interview time, ${name.split(" ")[0]}`,
-      message: `The interview for your ${department} application has been rescheduled.`,
+      message: `The interview for your ${department} application has been moved to a new time. Please sign in and confirm the new slot — your earlier confirmation doesn't carry over.`,
       detail: `New time: ${formatDateTime(whenMs)}`,
     };
   },
