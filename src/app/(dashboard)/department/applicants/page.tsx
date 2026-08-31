@@ -17,7 +17,10 @@ import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/cons
 import { formatDate } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { sendApplicantEmail, applicantEmails, senderTitleFor } from "@/lib/email";
-import { Users, Search } from "lucide-react";
+import { Users, Search, CalendarClock } from "lucide-react";
+import { addDoc } from "firebase/firestore";
+import { BulkScheduleModal } from "@/components/apply/BulkScheduleModal";
+import { Slot } from "@/lib/slots";
 import { toast } from "sonner";
 
 export default function DepartmentApplicantsPage() {
@@ -38,6 +41,10 @@ export default function DepartmentApplicantsPage() {
   } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [scheduledIds, setScheduledIds] = useState<Set<string>>(new Set());
 
   async function load() {
     if (!profile) return;
@@ -72,6 +79,15 @@ export default function DepartmentApplicantsPage() {
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as Application))
           .sort((a, b) => b.createdAt - a.createdAt)
+      );
+
+      // Anyone already holding an interview is excluded from bulk
+      // scheduling, so re-running it can't double-book them.
+      const ivSnap = await getDocs(
+        query(collection(db, "interviews"), where("departmentId", "==", targetId))
+      );
+      setScheduledIds(
+        new Set(ivSnap.docs.map((d) => (d.data() as { applicationId: string }).applicationId))
       );
     }
     setLoading(false);
@@ -202,6 +218,82 @@ export default function DepartmentApplicantsPage() {
     }
   }
 
+  /**
+   * Creates an interview per applicant and emails each their own time.
+   *
+   * Sends are sequential rather than parallel: a burst of fifty parallel
+   * requests risks Gmail throttling, and one-at-a-time lets the progress
+   * bar be truthful. A failure on one person doesn't abort the rest —
+   * their interview is still created, and the failure is reported at the
+   * end so those few can be contacted directly.
+   */
+  async function runBulkSchedule(slots: Slot[]) {
+    if (!profile || !department) return;
+    setBulkRunning(true);
+    setBulkProgress({ done: 0, total: slots.length });
+    let emailFailures = 0;
+
+    try {
+      for (let i = 0; i < slots.length; i++) {
+        const slot = slots[i];
+        await addDoc(collection(db, "interviews"), {
+          applicationId: slot.applicationId,
+          departmentId: department.id,
+          interviewerUserId: profile.uid,
+          interviewerName: profile.name,
+          scheduledAt: slot.startsAt,
+          applicantAccepted: null,
+          applicantRespondedAt: null,
+          attended: null,
+          notes: "",
+          ratings: null,
+          recommendation: null,
+          submittedAt: null,
+          coreDecision: null,
+          createdAt: Date.now(),
+        });
+
+        await updateDoc(doc(db, "applications", slot.applicationId), {
+          status: "INTERVIEW_SCHEDULED",
+          updatedAt: Date.now(),
+        });
+
+        const mail = await sendApplicantEmail({
+          to: slot.email,
+          senderName: profile.name,
+          senderTitle: senderTitleFor(profile.role, department.name),
+          ...applicantEmails.interviewScheduled(slot.name, department.name, slot.startsAt),
+        });
+        if (!mail.ok) emailFailures++;
+
+        setBulkProgress({ done: i + 1, total: slots.length });
+      }
+
+      await logActivity({
+        actorId: profile.uid,
+        actorName: profile.name,
+        action: "INTERVIEWS_BULK_SCHEDULED",
+        targetType: "department",
+        targetId: department.id,
+        message: `${profile.name} scheduled ${slots.length} interviews for ${department.name}`,
+        departmentId: department.id,
+      });
+
+      if (emailFailures > 0) {
+        toast.error(
+          `Scheduled all ${slots.length}, but ${emailFailures} email${emailFailures !== 1 ? "s" : ""} didn't send — contact those applicants directly.`
+        );
+      } else {
+        toast.success(`Scheduled and emailed ${slots.length} interviews`);
+      }
+      setBulkOpen(false);
+      load();
+    } finally {
+      setBulkRunning(false);
+      setBulkProgress(null);
+    }
+  }
+
   async function moveToReview(app: Application) {
     await updateDoc(doc(db, "applications", app.id), {
       status: "UNDER_REVIEW",
@@ -219,6 +311,12 @@ export default function DepartmentApplicantsPage() {
     );
   }
 
+  // Shortlisted and not already holding an interview — the people a bulk
+  // schedule should actually cover.
+  const awaitingSchedule = applications.filter(
+    (a) => a.status === "SHORTLISTED" && !scheduledIds.has(a.id)
+  );
+
   const filtered = applications.filter((a) => {
     const q = search.toLowerCase();
     const matchesSearch =
@@ -234,6 +332,14 @@ export default function DepartmentApplicantsPage() {
           <h1 className="text-xl font-semibold text-neutral-900">Applicants — {department.name}</h1>
           <p className="text-sm text-neutral-500">{applications.length} total applications</p>
         </div>
+        <div className="flex items-center gap-2">
+          {awaitingSchedule.length > 0 && (
+            <Button variant="outline" onClick={() => setBulkOpen(true)}>
+              <CalendarClock className="h-4 w-4" />
+              Schedule {awaitingSchedule.length} interview
+              {awaitingSchedule.length !== 1 ? "s" : ""}
+            </Button>
+          )}
         {canBrowseAll && allDepartments.length > 1 && (
           <Select
             className="w-52"
@@ -248,6 +354,7 @@ export default function DepartmentApplicantsPage() {
             ))}
           </Select>
         )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -364,6 +471,15 @@ export default function DepartmentApplicantsPage() {
           ))}
         </div>
       )}
+
+      <BulkScheduleModal
+        open={bulkOpen}
+        applicants={awaitingSchedule}
+        onClose={() => setBulkOpen(false)}
+        onConfirm={runBulkSchedule}
+        progress={bulkProgress}
+        running={bulkRunning}
+      />
 
       <Modal
         open={!!pendingDecision}
