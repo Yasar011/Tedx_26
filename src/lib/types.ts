@@ -82,6 +82,8 @@ export interface Application {
   /** Passport-size photo, stored on Cloudinary. */
   photoUrl?: string | null;
   photoPublicId?: string | null;
+  /** Optional supporting certificates, at most two. */
+  certificates?: { url: string; publicId: string; name: string }[];
   /** Recorded when the applicant reads a department's brief and accepts it.
    *  Kept as an audit trail of what they actually agreed to. */
   agreedToDepartment1?: boolean;

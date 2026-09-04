@@ -26,11 +26,18 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { Logo } from "@/components/ui/Logo";
 import { toast } from "sonner";
 import { logActivity } from "@/lib/activity";
-import { Ban, Check, Image as ImageIcon } from "lucide-react";
-import { compressImage } from "@/lib/imageCompress";
+import { Ban, Check, Image as ImageIcon, X } from "lucide-react";
+import {
+  compressImage,
+  MAX_CERTIFICATE_BYTES,
+  CERTIFICATE_EDGE_PX,
+} from "@/lib/imageCompress";
 import { uploadToCloudinary } from "@/lib/cloudinary";
 import { DepartmentAgreementModal } from "@/components/apply/DepartmentAgreementModal";
 import { VerifyEmailScreen } from "@/components/auth/VerifyEmailScreen";
+
+/** At most two certificates, as agreed with the organising team. */
+const MAX_CERTIFICATES = 2;
 
 export default function ApplyPage() {
   const { firebaseUser, profile, loading: authLoading } = useAuth();
@@ -60,6 +67,11 @@ export default function ApplyPage() {
   const [photo, setPhoto] = useState<{ file: File; preview: string } | null>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
 
+  // Optional supporting certificates. Capped at two so review stays quick
+  // and a single applicant can't push a lot of weight into storage.
+  const [certificates, setCertificates] = useState<{ file: File; preview: string }[]>([]);
+  const [certBusy, setCertBusy] = useState(false);
+
   // A department only counts as chosen once its brief has been accepted, so
   // the pending selection is held here until the applicant agrees.
   const [agreed1, setAgreed1] = useState(false);
@@ -79,6 +91,40 @@ export default function ApplyPage() {
     } finally {
       setPhotoBusy(false);
     }
+  }
+
+  async function handleCertificatePick(file: File) {
+    if (certificates.length >= MAX_CERTIFICATES) {
+      toast.error(`You can attach at most ${MAX_CERTIFICATES} certificates`);
+      return;
+    }
+    setCertBusy(true);
+    try {
+      // Squeezed harder than the photo, and from a larger starting edge so
+      // the text on a certificate stays readable at 200 KB.
+      const compressed = await compressImage(
+        file,
+        MAX_CERTIFICATE_BYTES,
+        CERTIFICATE_EDGE_PX
+      );
+      setCertificates((prev) => [
+        ...prev,
+        { file: compressed, preview: URL.createObjectURL(compressed) },
+      ]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not process that certificate");
+    } finally {
+      setCertBusy(false);
+    }
+  }
+
+  function removeCertificate(index: number) {
+    setCertificates((prev) => {
+      const next = [...prev];
+      const [gone] = next.splice(index, 1);
+      if (gone) URL.revokeObjectURL(gone.preview);
+      return next;
+    });
   }
 
   /** Opens the brief for a selection; nothing is committed until they agree. */
@@ -175,6 +221,19 @@ export default function ApplyPage() {
     try {
       const uploaded = await uploadToCloudinary(photo.file, "TEDxNIFT/applicants");
 
+      // Uploaded after the photo so a certificate failure can't cost the
+      // applicant their whole submission silently — it throws and is caught
+      // by the same handler, with nothing written to Firestore yet.
+      const uploadedCertificates = [];
+      for (const cert of certificates) {
+        const res = await uploadToCloudinary(cert.file, "TEDxNIFT/certificates");
+        uploadedCertificates.push({
+          url: res.url,
+          publicId: res.publicId,
+          name: cert.file.name,
+        });
+      }
+
       const appRef = await addDoc(collection(db, "applications"), {
         applicantUserId: firebaseUser.uid,
         name: profile.name,
@@ -191,6 +250,7 @@ export default function ApplyPage() {
         availability: form.availability,
         photoUrl: uploaded.url,
         photoPublicId: uploaded.publicId,
+        certificates: uploadedCertificates,
         agreedToDepartment1: agreed1,
         agreedToDepartment2: form.departmentPreference2 ? agreed2 : false,
         agreedAt: Date.now(),
@@ -390,6 +450,13 @@ export default function ApplyPage() {
 
               <PhotoField photo={photo} onPick={handlePhotoPick} busy={photoBusy} />
 
+              <CertificatesField
+                certificates={certificates}
+                onPick={handleCertificatePick}
+                onRemove={removeCertificate}
+                busy={certBusy}
+              />
+
               <div className="grid gap-5 sm:grid-cols-2">
                 <FormField
                   label="First Preference"
@@ -547,6 +614,91 @@ function PhotoField({
             </p>
           )}
         </div>
+      </div>
+    </FormField>
+  );
+}
+
+/**
+ * Optional certificate attachments.
+ *
+ * Deliberately quiet in the form: it sits below the required photo and
+ * states plainly that it can be skipped, so nobody assumes they are
+ * ineligible for having nothing to attach.
+ */
+function CertificatesField({
+  certificates,
+  onPick,
+  onRemove,
+  busy,
+}: {
+  certificates: { file: File; preview: string }[];
+  onPick: (file: File) => void;
+  onRemove: (index: number) => void;
+  busy: boolean;
+}) {
+  const full = certificates.length >= MAX_CERTIFICATES;
+
+  return (
+    <FormField
+      label="Certificates (optional)"
+      hint={`If you have any, attach up to ${MAX_CERTIFICATES}. JPG or PNG — each is compressed to 200 KB automatically. Leave empty if you have none.`}
+    >
+      <div className="space-y-3">
+        {certificates.length > 0 && (
+          <div className="flex flex-wrap gap-3">
+            {certificates.map((cert, i) => (
+              <div
+                key={cert.preview}
+                className="relative w-32 overflow-hidden rounded-lg border border-neutral-200"
+              >
+                {/* Object URL of a local file — next/image can't optimise this. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cert.preview} alt="" className="h-20 w-full object-cover" />
+                <div className="px-2 py-1.5">
+                  <p className="truncate text-[11px] text-neutral-600">{cert.file.name}</p>
+                  <p className="text-[11px] text-neutral-400">
+                    {(cert.file.size / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  aria-label="Remove certificate"
+                  className="absolute right-1 top-1 rounded-full bg-white/90 p-1 text-neutral-600 shadow-sm hover:text-red-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!full && (
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) onPick(f);
+                e.target.value = "";
+              }}
+            />
+            {busy
+              ? "Processing…"
+              : certificates.length === 0
+              ? "Add a certificate"
+              : "Add another"}
+          </label>
+        )}
+
+        {full && (
+          <p className="text-xs text-neutral-500">
+            Both slots used. Remove one to swap it.
+          </p>
+        )}
       </div>
     </FormField>
   );

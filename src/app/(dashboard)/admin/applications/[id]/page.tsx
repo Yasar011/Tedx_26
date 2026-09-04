@@ -108,6 +108,31 @@ export default function AdminApplicationDetailPage() {
         </CardContent>
       </Card>
 
+      {application.certificates && application.certificates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Certificates ({application.certificates.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            {application.certificates.map((cert) => (
+              <a
+                key={cert.publicId}
+                href={cert.url}
+                target="_blank"
+                rel="noreferrer"
+                title="Open full size"
+                className="w-40 overflow-hidden rounded-lg border border-neutral-200 transition-shadow hover:shadow-md"
+              >
+                {/* Cloudinary URL - next/image would need the host allow-listed. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={cert.url} alt={cert.name} className="h-28 w-full object-cover" />
+                <p className="truncate px-2 py-1.5 text-[11px] text-neutral-600">{cert.name}</p>
+              </a>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {interview && (
         <Card>
           <CardHeader><CardTitle>Interview</CardTitle></CardHeader>
