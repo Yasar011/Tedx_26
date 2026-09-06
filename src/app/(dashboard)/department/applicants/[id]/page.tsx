@@ -42,6 +42,12 @@ export default function InterviewDetailPage() {
   const { profile } = useAuth();
   const router = useRouter();
   const [application, setApplication] = useState<Application | null>(null);
+  // The department this application belongs to, which is not necessarily the
+  // reviewer's own. An Admin runs the pipeline for every team and may hold no
+  // department at all; stamping their own onto the interview would file it
+  // under the wrong department — or under none — hiding it from that
+  // department's list and from the bulk scheduler's double-booking check.
+  const [appDepartmentId, setAppDepartmentId] = useState<string | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,7 +66,16 @@ export default function InterviewDetailPage() {
 
   async function load() {
     const appSnap = await getDoc(doc(db, "applications", id));
-    if (appSnap.exists()) setApplication({ id: appSnap.id, ...appSnap.data() } as Application);
+    if (appSnap.exists()) {
+      const app = { id: appSnap.id, ...appSnap.data() } as Application;
+      setApplication(app);
+      // An application records its department by name, so the id is looked
+      // up rather than assumed from whoever happens to be reviewing.
+      const deptSnap = await getDocs(
+        query(collection(db, "departments"), where("name", "==", app.departmentPreference))
+      );
+      setAppDepartmentId(deptSnap.empty ? null : deptSnap.docs[0].id);
+    }
 
     const interviewSnap = await getDocs(
       query(collection(db, "interviews"), where("applicationId", "==", id))
@@ -82,12 +97,18 @@ export default function InterviewDetailPage() {
 
   async function scheduleInterview() {
     if (!application || !profile) return;
+    if (!appDepartmentId) {
+      toast.error(
+        `No department named "${application.departmentPreference}" exists any more, so this interview can't be filed. Restore or rename it under Admin → Departments.`
+      );
+      return;
+    }
     setSaving(true);
     try {
       const ts = scheduledAt ? new Date(scheduledAt).getTime() : Date.now();
       const ref = await addDoc(collection(db, "interviews"), {
         applicationId: application.id,
-        departmentId: profile.departmentId,
+        departmentId: appDepartmentId,
         interviewerUserId: profile.uid,
         interviewerName: profile.name,
         scheduledAt: ts,
@@ -109,7 +130,7 @@ export default function InterviewDetailPage() {
         targetType: "application",
         targetId: application.id,
         message: `Interview scheduled for ${application.name} by ${profile.name}`,
-        departmentId: profile.departmentId,
+        departmentId: appDepartmentId,
       });
       toast.success("Interview scheduled");
 
@@ -163,7 +184,7 @@ export default function InterviewDetailPage() {
         targetType: "application",
         targetId: application.id,
         message: `${profile.name} moved ${application.name}'s interview to ${formatDateTime(ts)}`,
-        departmentId: profile.departmentId,
+        departmentId: appDepartmentId,
       });
 
       const mail = await sendApplicantEmail({
@@ -203,7 +224,7 @@ export default function InterviewDetailPage() {
         targetType: "application",
         targetId: application.id,
         message: `${application.name} was marked ${attended ? "attended" : "a no-show"} by ${profile.name}`,
-        departmentId: profile.departmentId,
+        departmentId: appDepartmentId,
       });
       toast.success(attended ? "Marked as attended" : "Marked as no-show");
     } catch (err) {
@@ -232,7 +253,7 @@ export default function InterviewDetailPage() {
         targetType: "application",
         targetId: application.id,
         message: `${profile.name} recommended "${recommendation}" for ${application.name} and sent to Core Team`,
-        departmentId: profile.departmentId,
+        departmentId: appDepartmentId,
       });
       toast.success("Recommendation submitted to Core Team");
       router.push("/department/applicants");

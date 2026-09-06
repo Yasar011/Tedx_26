@@ -112,7 +112,7 @@ export default function DepartmentApplicantsPage() {
       targetType: "application",
       targetId: app.id,
       message: `${app.name} was shortlisted by ${profile!.name}`,
-      departmentId: profile!.departmentId,
+      departmentId: department?.id ?? null,
     });
     toast.success(`${app.name} shortlisted`);
 
@@ -188,7 +188,7 @@ export default function DepartmentApplicantsPage() {
           : `${app.name} marked ${outcome.toLowerCase()} by ${profile!.name}${
               rejectNote ? `: ${rejectNote}` : ""
             }`,
-        departmentId: profile!.departmentId,
+        departmentId: department?.id ?? null,
       });
 
       toast.success(
@@ -306,7 +306,13 @@ export default function DepartmentApplicantsPage() {
 
   if (loading) return <FullPageSpinner />;
   if (!department) {
-    return (
+    return canBrowseAll ? (
+      <EmptyState
+        icon={Users}
+        title="No departments yet"
+        description="Create a department under Admin → Departments and its applicants will appear here."
+      />
+    ) : (
       <EmptyState icon={Users} title="No department assigned" description="Contact an Admin to get assigned to a department." />
     );
   }

@@ -63,11 +63,21 @@ export default function AdminApplicationDetailPage() {
           </div>
         </div>
 
-        {/* Uses the browser's own print-to-PDF rather than bundling a PDF
-            library — the print stylesheet below strips the app chrome. */}
-        <Button variant="outline" onClick={() => window.print()} className="print:hidden">
-          <Download className="h-4 w-4" /> Download PDF
-        </Button>
+        <div className="flex items-center gap-2 print:hidden">
+          {/* This page is a record, not a workbench — every action on an
+              application lives in the review screens. Without a way through,
+              an Admin reading an application here has to navigate back out
+              and find the same person again to do anything about them. */}
+          <Link href={`/department/applicants/${application.id}`}>
+            <Button variant="outline">Review / interview</Button>
+          </Link>
+
+          {/* Uses the browser's own print-to-PDF rather than bundling a PDF
+              library — the print stylesheet below strips the app chrome. */}
+          <Button variant="outline" onClick={() => window.print()}>
+            <Download className="h-4 w-4" /> Download PDF
+          </Button>
+        </div>
       </div>
 
       <Card>

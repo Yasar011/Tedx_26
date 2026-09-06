@@ -26,6 +26,10 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   admin: [
     { label: "Command Center", href: "/admin/command-center", icon: LayoutDashboard },
     { label: "Applications", href: "/admin/applications", icon: FileText },
+    // The Admin runs recruitment for every department, not only the final
+    // approval at the end of it, so the review screens are always reachable
+    // — a department is picked from inside rather than being required here.
+    { label: "Review Applicants", href: "/department/applicants", icon: UserCheck },
     { label: "Departments", href: "/admin/departments", icon: Building2 },
     { label: "Team", href: "/admin/team", icon: Users },
     { label: "Approvals", href: "/core/approvals", icon: CheckSquare },
