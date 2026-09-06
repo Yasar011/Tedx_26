@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { LoadError } from "@/components/ui/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
@@ -28,6 +29,7 @@ export default function DepartmentApplicantsPage() {
   const [department, setDepartment] = useState<Department | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const canBrowseAll = profile?.role === "admin" || profile?.role === "core";
@@ -68,6 +70,8 @@ export default function DepartmentApplicantsPage() {
     }
 
     setLoading(true);
+    setLoadError(null);
+    try {
     const deptSnap = await getDoc(doc(db, "departments", targetId));
     const dept = deptSnap.exists() ? ({ id: deptSnap.id, ...deptSnap.data() } as Department) : null;
     setDepartment(dept);
@@ -90,7 +94,13 @@ export default function DepartmentApplicantsPage() {
         new Set(ivSnap.docs.map((d) => (d.data() as { applicationId: string }).applicationId))
       );
     }
-    setLoading(false);
+    } catch (err) {
+      // A refused rule or a dropped connection used to throw straight out of
+      // here, so setLoading(false) never ran and the list spun for ever.
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -305,6 +315,15 @@ export default function DepartmentApplicantsPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+  if (loadError) {
+    return (
+      <LoadError
+        title="Applicants couldn't be loaded"
+        message={loadError}
+        onRetry={() => { setLoading(true); load(); }}
+      />
+    );
+  }
   if (!department) {
     return canBrowseAll ? (
       <EmptyState

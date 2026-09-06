@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FormField, Input, Select, Textarea } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { LoadError } from "@/components/ui/LoadError";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
@@ -276,13 +277,11 @@ export default function InterviewDetailPage() {
   if (loading) return <FullPageSpinner />;
   if (loadError) {
     return (
-      <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-5">
-        <p className="text-sm font-semibold text-red-800">This applicant couldn&apos;t be loaded</p>
-        <p className="mt-1 break-words font-mono text-xs text-red-700">{loadError}</p>
-        <Button className="mt-4" variant="outline" onClick={() => { setLoading(true); load(); }}>
-          Try again
-        </Button>
-      </div>
+      <LoadError
+        title="This applicant couldn't be loaded"
+        message={loadError}
+        onRetry={() => { setLoading(true); load(); }}
+      />
     );
   }
   if (!application) return <p className="text-sm text-neutral-500">Application not found.</p>;

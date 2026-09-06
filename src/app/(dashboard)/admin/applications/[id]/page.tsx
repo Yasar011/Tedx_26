@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { LoadError } from "@/components/ui/LoadError";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
@@ -19,18 +20,36 @@ export default function AdminApplicationDetailPage() {
   const [application, setApplication] = useState<Application | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
       const appSnap = await getDoc(doc(db, "applications", id));
       if (appSnap.exists()) setApplication({ id: appSnap.id, ...appSnap.data() } as Application);
       const ivSnap = await getDocs(query(collection(db, "interviews"), where("applicationId", "==", id)));
       if (!ivSnap.empty) setInterview({ id: ivSnap.docs[0].id, ...ivSnap.docs[0].data() } as Interview);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [id]);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   if (loading) return <FullPageSpinner />;
+  if (loadError) {
+    return (
+      <LoadError
+        title="This application couldn't be loaded"
+        message={loadError}
+        onRetry={() => { setLoading(true); load(); }}
+      />
+    );
+  }
   if (!application) return <p className="text-sm text-neutral-500">Application not found.</p>;
 
   return (
