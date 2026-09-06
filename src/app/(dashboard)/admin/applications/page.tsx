@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { collection, getDocs } from "firebase/firestore";
@@ -9,6 +9,7 @@ import { Application } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { LoadError } from "@/components/ui/LoadError";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
@@ -18,23 +19,41 @@ export default function AdminApplicationsPage() {
   const router = useRouter();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
 
-  useEffect(() => {
-    (async () => {
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
       const snap = await getDocs(collection(db, "applications"));
       setApplications(
         snap.docs
           .map((d) => ({ id: d.id, ...d.data() } as Application))
           .sort((a, b) => b.createdAt - a.createdAt)
       );
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
       setLoading(false);
-    })();
+    }
   }, []);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   if (loading) return <FullPageSpinner />;
+  if (loadError) {
+    return (
+      <LoadError
+        title="Applications couldn't be loaded"
+        message={loadError}
+        onRetry={() => { setLoading(true); load(); }}
+      />
+    );
+  }
 
   const departments = Array.from(new Set(applications.map((a) => a.departmentPreference))).filter(Boolean);
 

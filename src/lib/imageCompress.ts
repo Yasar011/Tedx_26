@@ -18,6 +18,20 @@ const MAX_EDGE_PX = 1000;
  */
 export const CERTIFICATE_EDGE_PX = 1600;
 
+/**
+ * Certificates are restricted to JPG. Every other format an applicant can
+ * reach for is a liability here: iPhones hand over HEIC, which browsers
+ * cannot decode, and the resulting failure looks to the applicant like the
+ * upload being broken rather than the file being unreadable.
+ *
+ * Some browsers report an empty type for a file they don't recognise, so
+ * the extension is checked as well as the MIME type.
+ */
+export function isJpegFile(file: File): boolean {
+  if (file.type) return file.type === "image/jpeg" || file.type === "image/jpg";
+  return /\.jpe?g$/i.test(file.name);
+}
+
 function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);

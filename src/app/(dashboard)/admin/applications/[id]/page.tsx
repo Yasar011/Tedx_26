@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { LoadError } from "@/components/ui/LoadError";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
@@ -19,18 +20,36 @@ export default function AdminApplicationDetailPage() {
   const [application, setApplication] = useState<Application | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  useEffect(() => {
-    (async () => {
+  const load = useCallback(async () => {
+    setLoadError(null);
+    try {
       const appSnap = await getDoc(doc(db, "applications", id));
       if (appSnap.exists()) setApplication({ id: appSnap.id, ...appSnap.data() } as Application);
       const ivSnap = await getDocs(query(collection(db, "interviews"), where("applicationId", "==", id)));
       if (!ivSnap.empty) setInterview({ id: ivSnap.docs[0].id, ...ivSnap.docs[0].data() } as Interview);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
       setLoading(false);
-    })();
+    }
   }, [id]);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   if (loading) return <FullPageSpinner />;
+  if (loadError) {
+    return (
+      <LoadError
+        title="This application couldn't be loaded"
+        message={loadError}
+        onRetry={() => { setLoading(true); load(); }}
+      />
+    );
+  }
   if (!application) return <p className="text-sm text-neutral-500">Application not found.</p>;
 
   return (
@@ -63,11 +82,21 @@ export default function AdminApplicationDetailPage() {
           </div>
         </div>
 
-        {/* Uses the browser's own print-to-PDF rather than bundling a PDF
-            library — the print stylesheet below strips the app chrome. */}
-        <Button variant="outline" onClick={() => window.print()} className="print:hidden">
-          <Download className="h-4 w-4" /> Download PDF
-        </Button>
+        <div className="flex items-center gap-2 print:hidden">
+          {/* This page is a record, not a workbench — every action on an
+              application lives in the review screens. Without a way through,
+              an Admin reading an application here has to navigate back out
+              and find the same person again to do anything about them. */}
+          <Link href={`/department/applicants/${application.id}`}>
+            <Button variant="outline">Review / interview</Button>
+          </Link>
+
+          {/* Uses the browser's own print-to-PDF rather than bundling a PDF
+              library — the print stylesheet below strips the app chrome. */}
+          <Button variant="outline" onClick={() => window.print()}>
+            <Download className="h-4 w-4" /> Download PDF
+          </Button>
+        </div>
       </div>
 
       <Card>

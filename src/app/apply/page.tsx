@@ -29,6 +29,7 @@ import { logActivity } from "@/lib/activity";
 import { Ban, Check, Image as ImageIcon, X } from "lucide-react";
 import {
   compressImage,
+  isJpegFile,
   MAX_CERTIFICATE_BYTES,
   CERTIFICATE_EDGE_PX,
 } from "@/lib/imageCompress";
@@ -96,6 +97,15 @@ export default function ApplyPage() {
   async function handleCertificatePick(file: File) {
     if (certificates.length >= MAX_CERTIFICATES) {
       toast.error(`You can attach at most ${MAX_CERTIFICATES} certificates`);
+      return;
+    }
+    // Caught here rather than in the compressor so the applicant is told
+    // what to do about it. A phone photo is HEIC unless it is saved or
+    // shared as JPG, and HEIC does not decode in most browsers.
+    if (!isJpegFile(file)) {
+      toast.error(
+        "Certificates must be JPG files. If this came from a phone, save or share it as JPG first."
+      );
       return;
     }
     setCertBusy(true);
@@ -225,13 +235,24 @@ export default function ApplyPage() {
       // applicant their whole submission silently — it throws and is caught
       // by the same handler, with nothing written to Firestore yet.
       const uploadedCertificates = [];
-      for (const cert of certificates) {
-        const res = await uploadToCloudinary(cert.file, "TEDxNIFT/certificates");
-        uploadedCertificates.push({
-          url: res.url,
-          publicId: res.publicId,
-          name: cert.file.name,
-        });
+      for (const [i, cert] of certificates.entries()) {
+        try {
+          const res = await uploadToCloudinary(cert.file, "TEDxNIFT/certificates");
+          uploadedCertificates.push({
+            url: res.url,
+            publicId: res.publicId,
+            name: cert.file.name,
+          });
+        } catch (err) {
+          // Certificates are optional, so a failed one must never leave the
+          // applicant staring at an error with no way past it. Say which
+          // file failed and that removing it still gets them submitted.
+          const reason = err instanceof Error ? err.message : "Upload failed";
+          throw new Error(
+            `Certificate ${i + 1} (${cert.file.name}) could not be uploaded. ${reason} ` +
+              "Certificates are optional — you can remove it and submit without it."
+          );
+        }
       }
 
       const appRef = await addDoc(collection(db, "applications"), {
@@ -642,7 +663,7 @@ function CertificatesField({
   return (
     <FormField
       label="Certificates (optional)"
-      hint={`If you have any, attach up to ${MAX_CERTIFICATES}. JPG or PNG — each is compressed to 200 KB automatically. Leave empty if you have none.`}
+      hint={`If you have any, attach up to ${MAX_CERTIFICATES}. JPG only — each is compressed to 200 KB automatically. Leave empty if you have none.`}
     >
       <div className="space-y-3">
         {certificates.length > 0 && (
@@ -678,7 +699,7 @@ function CertificatesField({
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
             <input
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,image/jpeg"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];

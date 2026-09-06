@@ -61,21 +61,22 @@ const EVENT = "TEDxNIFT Jodhpur";
 
 /**
  * How the sender is described at the foot of an applicant email.
- * A Head signs as the head of their department; org leadership signs for
- * the organising team.
+ *
+ * The role decides this, never the screen they happen to be on. An Admin
+ * reviewing inside a team's applicant list is still the Admin: signing that
+ * mail "Head of Sponsorship" claims a post they don't hold, and points the
+ * applicant's reply at the wrong person. Only an actual Department Head
+ * signs for a department.
  */
 export function senderTitleFor(
   role: string | undefined,
   departmentName?: string | null
 ): string {
-  // Acting for one department — a Head, or an Admin/Core member working
-  // inside a specific team's applicant list.
-  if (departmentName && (role === "department_head" || role === "admin" || role === "core")) {
+  if (role === "admin") return `Admin / Organiser, ${EVENT}`;
+  if (role === "core") return `Core Organising Team, ${EVENT}`;
+  if (departmentName && role === "department_head") {
     return `Head of ${departmentName}, ${EVENT}`;
   }
-  // Acting org-wide, e.g. issuing a TEDx ID from the Approval Center.
-  if (role === "admin") return `Organising Head, ${EVENT}`;
-  if (role === "core") return `Core Organising Team, ${EVENT}`;
   return EVENT;
 }
 
