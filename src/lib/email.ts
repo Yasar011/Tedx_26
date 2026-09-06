@@ -72,7 +72,7 @@ export function senderTitleFor(
   role: string | undefined,
   departmentName?: string | null
 ): string {
-  if (role === "admin") return `Organising Head, ${EVENT}`;
+  if (role === "admin") return `Admin / Organiser, ${EVENT}`;
   if (role === "core") return `Core Organising Team, ${EVENT}`;
   if (departmentName && role === "department_head") {
     return `Head of ${departmentName}, ${EVENT}`;
