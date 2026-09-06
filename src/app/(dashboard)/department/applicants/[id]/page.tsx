@@ -50,6 +50,7 @@ export default function InterviewDetailPage() {
   const [appDepartmentId, setAppDepartmentId] = useState<string | null>(null);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [scheduledAt, setScheduledAt] = useState("");
@@ -65,29 +66,39 @@ export default function InterviewDetailPage() {
   const [recommendation, setRecommendation] = useState<Recommendation>("SELECT");
 
   async function load() {
-    const appSnap = await getDoc(doc(db, "applications", id));
-    if (appSnap.exists()) {
-      const app = { id: appSnap.id, ...appSnap.data() } as Application;
-      setApplication(app);
-      // An application records its department by name, so the id is looked
-      // up rather than assumed from whoever happens to be reviewing.
-      const deptSnap = await getDocs(
-        query(collection(db, "departments"), where("name", "==", app.departmentPreference))
-      );
-      setAppDepartmentId(deptSnap.empty ? null : deptSnap.docs[0].id);
-    }
+    // Every read here can fail — an offline moment, or rules refusing the
+    // interviews query. Previously any of them threw out of this function,
+    // so setLoading(false) never ran and the page sat on its spinner for
+    // ever with nothing said about why.
+    setLoadError(null);
+    try {
+      const appSnap = await getDoc(doc(db, "applications", id));
+      if (appSnap.exists()) {
+        const app = { id: appSnap.id, ...appSnap.data() } as Application;
+        setApplication(app);
+        // An application records its department by name, so the id is looked
+        // up rather than assumed from whoever happens to be reviewing.
+        const deptSnap = await getDocs(
+          query(collection(db, "departments"), where("name", "==", app.departmentPreference))
+        );
+        setAppDepartmentId(deptSnap.empty ? null : deptSnap.docs[0].id);
+      }
 
-    const interviewSnap = await getDocs(
-      query(collection(db, "interviews"), where("applicationId", "==", id))
-    );
-    if (!interviewSnap.empty) {
-      const iv = { id: interviewSnap.docs[0].id, ...interviewSnap.docs[0].data() } as Interview;
-      setInterview(iv);
-      setNotes(iv.notes ?? "");
-      if (iv.ratings) setRatings(iv.ratings);
-      if (iv.recommendation) setRecommendation(iv.recommendation);
+      const interviewSnap = await getDocs(
+        query(collection(db, "interviews"), where("applicationId", "==", id))
+      );
+      if (!interviewSnap.empty) {
+        const iv = { id: interviewSnap.docs[0].id, ...interviewSnap.docs[0].data() } as Interview;
+        setInterview(iv);
+        setNotes(iv.notes ?? "");
+        if (iv.ratings) setRatings(iv.ratings);
+        if (iv.recommendation) setRecommendation(iv.recommendation);
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   useEffect(() => {
@@ -263,6 +274,17 @@ export default function InterviewDetailPage() {
   }
 
   if (loading) return <FullPageSpinner />;
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-lg rounded-xl border border-red-200 bg-red-50 p-5">
+        <p className="text-sm font-semibold text-red-800">This applicant couldn&apos;t be loaded</p>
+        <p className="mt-1 break-words font-mono text-xs text-red-700">{loadError}</p>
+        <Button className="mt-4" variant="outline" onClick={() => { setLoading(true); load(); }}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
   if (!application) return <p className="text-sm text-neutral-500">Application not found.</p>;
 
   const readOnly = !!interview?.submittedAt;
