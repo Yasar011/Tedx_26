@@ -22,6 +22,7 @@ import { FormField, Input, Select, Textarea } from "@/components/ui/Input";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { LoadError } from "@/components/ui/LoadError";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
+import { isOrgLeadership } from "@/lib/permissions";
 import { formatDateTime } from "@/lib/utils";
 import { logActivity } from "@/lib/activity";
 import { sendApplicantEmail, applicantEmails, senderTitleFor } from "@/lib/email";
@@ -74,6 +75,7 @@ export default function InterviewDetailPage() {
     setLoadError(null);
     try {
       const appSnap = await getDoc(doc(db, "applications", id));
+      let deptId: string | null = null;
       if (appSnap.exists()) {
         const app = { id: appSnap.id, ...appSnap.data() } as Application;
         setApplication(app);
@@ -82,11 +84,26 @@ export default function InterviewDetailPage() {
         const deptSnap = await getDocs(
           query(collection(db, "departments"), where("name", "==", app.departmentPreference))
         );
-        setAppDepartmentId(deptSnap.empty ? null : deptSnap.docs[0].id);
+        deptId = deptSnap.empty ? null : deptSnap.docs[0].id;
+        setAppDepartmentId(deptId);
       }
 
+      // Security rules are not filters: Firestore allows a query only when
+      // the query's own constraints prove every match is readable. Core is
+      // cleared outright by isCore(), but a Department Head is cleared by
+      // resource.data.departmentId — so unless that constraint is in the
+      // query, Firestore refuses the whole thing, which is exactly how a
+      // Head opening an applicant got "Missing or insufficient permissions"
+      // on a page that worked for an Admin.
+      const scoped = !isOrgLeadership(profile) && !!deptId;
       const interviewSnap = await getDocs(
-        query(collection(db, "interviews"), where("applicationId", "==", id))
+        scoped
+          ? query(
+              collection(db, "interviews"),
+              where("applicationId", "==", id),
+              where("departmentId", "==", deptId)
+            )
+          : query(collection(db, "interviews"), where("applicationId", "==", id))
       );
       if (!interviewSnap.empty) {
         const iv = { id: interviewSnap.docs[0].id, ...interviewSnap.docs[0].data() } as Interview;
@@ -105,7 +122,7 @@ export default function InterviewDetailPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [id, profile]);
 
   async function scheduleInterview() {
     if (!application || !profile) return;
@@ -120,6 +137,9 @@ export default function InterviewDetailPage() {
       const ts = scheduledAt ? new Date(scheduledAt).getTime() : Date.now();
       const ref = await addDoc(collection(db, "interviews"), {
         applicationId: application.id,
+        // Stamped here so the applicant's own dashboard can query for it;
+        // reaching it through the application can't be proven for a query.
+        applicantUserId: application.applicantUserId,
         departmentId: appDepartmentId,
         interviewerUserId: profile.uid,
         interviewerName: profile.name,

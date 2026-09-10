@@ -54,9 +54,15 @@ export default function ApplicantPage() {
         // Pull the scheduled time so they can see when their interview is
         // without waiting on the email. Only the time is shown — never the
         // ratings or the interviewer's recommendation.
+        //
+        // Queried by applicantUserId, not applicationId: the rule that lets
+        // them read it has to be provable from the query's own constraints,
+        // and the older one resolved the owner through a get() on the
+        // application, which no query can satisfy. That refusal was caught
+        // below as "non-fatal", so this card simply never appeared.
         try {
           const ivSnap = await getDocs(
-            query(collection(db, "interviews"), where("applicationId", "==", app.id))
+            query(collection(db, "interviews"), where("applicantUserId", "==", profile.uid))
           );
           const interviews = ivSnap.docs
             .map((d) => ({ id: d.id, ...d.data() } as Interview))

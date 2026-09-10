@@ -30,3 +30,15 @@ export function isDeptLeadOf(
 export function hasOwnDepartment(profile: UserProfile | null): boolean {
   return !!profile?.departmentId;
 }
+
+/**
+ * Org-level leadership, matching isCore() in firestore.rules.
+ *
+ * Worth knowing on the client because security rules are not filters: a
+ * query is permitted only when its own constraints prove every match is
+ * readable. Core clears that on its own; everyone else has to put the
+ * constraint the rule names into the query itself.
+ */
+export function isOrgLeadership(profile: UserProfile | null): boolean {
+  return profile?.role === "admin" || profile?.role === "core";
+}
