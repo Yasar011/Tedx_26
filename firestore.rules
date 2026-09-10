@@ -160,9 +160,31 @@ service cloud.firestore {
             request.resource.data.movedToSecond == true)
         );
 
-      // Core/Admin make the final call.
+      // Core/Admin make the final call, and may propose moving an applicant
+      // to a different department. The proposal only records what is being
+      // offered — departmentPreference is untouched until the applicant
+      // agrees, so this cannot move anyone without their say-so.
       allow update: if isCore() &&
-        onlyFieldsChanged(['status', 'updatedAt']);
+        onlyFieldsChanged(['status', 'updatedAt', 'offeredDepartment', 'statusBeforeOffer']);
+
+      // The applicant answering a proposed department change. As narrow as
+      // the second-choice rule: accepting moves them to exactly the
+      // department that was offered and no other, and declining restores
+      // the status they held before the offer. Neither branch lets them
+      // advance their own application or pick a department for themselves.
+      allow update: if isSignedIn() &&
+        resource.data.applicantUserId == request.auth.uid &&
+        resource.data.status == 'DEPARTMENT_CHANGE_OFFERED' &&
+        onlyFieldsChanged([
+          'status', 'departmentPreference', 'offeredDepartment',
+          'statusBeforeOffer', 'agreedToDepartment1', 'agreedAt', 'updatedAt'
+        ]) &&
+        request.resource.data.offeredDepartment == null && (
+          (request.resource.data.status == 'SUBMITTED' &&
+            request.resource.data.departmentPreference == resource.data.offeredDepartment) ||
+          (request.resource.data.status == resource.data.statusBeforeOffer &&
+            request.resource.data.departmentPreference == resource.data.departmentPreference)
+        );
 
       // Admin has unrestricted override on any field (correcting data, etc).
       allow update: if isAdmin();
