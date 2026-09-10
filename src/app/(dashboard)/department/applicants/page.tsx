@@ -317,6 +317,11 @@ export default function DepartmentApplicantsPage() {
         const slot = slots[i];
         await addDoc(collection(db, "interviews"), {
           applicationId: slot.applicationId,
+          // As in the single-interview path: the applicant's dashboard finds
+          // their interview by this field, having no readable way to it via
+          // the application.
+          applicantUserId:
+            applications.find((a) => a.id === slot.applicationId)?.applicantUserId ?? null,
           departmentId: department.id,
           interviewerUserId: profile.uid,
           interviewerName: profile.name,

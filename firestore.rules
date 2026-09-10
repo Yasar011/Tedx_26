@@ -194,11 +194,20 @@ service cloud.firestore {
 
     // ---------- INTERVIEWS ----------
     match /interviews/{interviewId} {
+      // The applicant may read their OWN interview, so their dashboard can
+      // show them the scheduled date. Ratings and the recommendation are
+      // never rendered to them — only the time.
+      //
+      // Stamped on the interview rather than looked up through the
+      // application, because rules are not filters: a clause resolved by
+      // get() can never be proven for a query, so the applicant's own
+      // dashboard query was refused outright and the failure was swallowed
+      // as "non-fatal" — leaving them unable to see or confirm their slot.
+      // The get() form is kept for interviews written before the field
+      // existed, which are still readable one document at a time.
       allow read: if isCore() ||
         (isDeptHead() && resource.data.departmentId == myDepartmentId()) ||
-        // The applicant may read their OWN interview, so their dashboard can
-        // show them the scheduled date. Ratings and the recommendation are
-        // never rendered to them — only the time.
+        (isSignedIn() && resource.data.applicantUserId == request.auth.uid) ||
         (isSignedIn() &&
           get(/databases/$(database)/documents/applications/$(resource.data.applicationId))
             .data.applicantUserId == request.auth.uid);
