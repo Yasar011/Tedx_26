@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, doc, getDocs, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Application, Interview } from "@/lib/types";
+import { Application, Department, Interview } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -13,6 +13,8 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { APPLICATION_STATUS_COLORS, APPLICATION_STATUS_LABELS } from "@/lib/constants";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { FileText, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { DepartmentAgreementModal } from "@/components/apply/DepartmentAgreementModal";
 import { toast } from "sonner";
 import { notify } from "@/lib/notifications";
 
@@ -32,8 +34,12 @@ export default function ApplicantPage() {
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
   const [deciding, setDeciding] = useState<
-    "accept" | "decline" | "accept-interview" | "decline-interview" | null
+    "accept" | "decline" | "accept-interview" | "decline-interview" | "move" | null
   >(null);
+  // The department an Admin has proposed, loaded so its brief can be shown —
+  // agreeing to a move they can't read anything about would be meaningless.
+  const [offered, setOffered] = useState<Department | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
 
   useEffect(() => {
     if (!profile) return;
@@ -58,6 +64,19 @@ export default function ApplicantPage() {
           if (interviews.length > 0) setInterview(interviews[0]);
         } catch {
           /* non-fatal: the status pipeline still renders */
+        }
+
+        if (app.status === "DEPARTMENT_CHANGE_OFFERED" && app.offeredDepartment) {
+          try {
+            const dSnap = await getDocs(
+              query(collection(db, "departments"), where("name", "==", app.offeredDepartment))
+            );
+            if (!dSnap.empty) {
+              setOffered({ id: dSnap.docs[0].id, ...dSnap.docs[0].data() } as Department);
+            }
+          } catch {
+            /* the offer is still answerable without the brief */
+          }
         }
       }
       setLoading(false);
@@ -95,6 +114,46 @@ export default function ApplicantPage() {
       window.location.reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not update your application");
+      setDeciding(null);
+    }
+  }
+
+  /**
+   * The applicant's answer to a proposed department change.
+   *
+   * Accepting is what actually moves them: their department becomes the one
+   * that was offered and the application goes back to SUBMITTED, so the new
+   * team picks it up as a fresh one. Declining restores the status they held
+   * before the offer, so considering it costs them nothing. Security rules
+   * permit only these two transitions.
+   */
+  async function respondToMove(accept: boolean) {
+    if (!application) return;
+    setDeciding(accept ? "move" : "decline");
+    try {
+      if (accept) {
+        await updateDoc(doc(db, "applications", application.id), {
+          departmentPreference: application.offeredDepartment,
+          offeredDepartment: null,
+          statusBeforeOffer: null,
+          status: "SUBMITTED",
+          agreedToDepartment1: true,
+          agreedAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+        toast.success(`Moved to ${application.offeredDepartment}`);
+      } else {
+        await updateDoc(doc(db, "applications", application.id), {
+          offeredDepartment: null,
+          statusBeforeOffer: null,
+          status: application.statusBeforeOffer ?? "SUBMITTED",
+          updatedAt: Date.now(),
+        });
+        toast.success(`Staying with ${application.departmentPreference}`);
+      }
+      window.location.reload();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not save your answer");
       setDeciding(null);
     }
   }
@@ -145,12 +204,21 @@ export default function ApplicantPage() {
   if (loading) return <FullPageSpinner />;
 
   if (!application) {
+    // Being an applicant with no application on file is the normal state of
+    // someone who has just been given the role, or who signed up and never
+    // finished. Previously this page simply said nothing was found and left
+    // them there, with no route to the form at all.
     return (
-      <EmptyState
-        icon={FileText}
-        title="No application found"
-        description="We couldn't find an application linked to your account."
-      />
+      <div className="mx-auto max-w-lg py-12 text-center">
+        <EmptyState
+          icon={FileText}
+          title="You haven't applied yet"
+          description="There's no application linked to your account. Fill in the form and you'll be able to track its progress here."
+        />
+        <Link href="/apply">
+          <Button className="mt-6">Start my application</Button>
+        </Link>
+      </div>
     );
   }
 
@@ -167,6 +235,54 @@ export default function ApplicantPage() {
         <h1 className="text-xl font-semibold text-neutral-900">Welcome, {application.name}</h1>
         <p className="text-sm text-neutral-500">Track your TEDxNIFT Jodhpur application status below.</p>
       </div>
+
+      {application.status === "DEPARTMENT_CHANGE_OFFERED" && application.offeredDepartment && (
+        <Card className="border-sky-300 bg-sky-50/60">
+          <CardContent className="py-5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-sky-700">
+              A different team for you?
+            </p>
+            <p className="mt-2 text-sm text-neutral-800">
+              The organising team would like to move your application from{" "}
+              <strong>{application.departmentPreference}</strong> to{" "}
+              <strong>{application.offeredDepartment}</strong>.
+            </p>
+            <p className="mt-2 text-xs text-neutral-600">
+              Nothing has changed yet. Read what {application.offeredDepartment} does before you
+              decide — if you&apos;d rather stay where you are, decline and your application
+              carries on exactly as it was.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                loading={deciding === "move"}
+                onClick={() => (offered ? setBriefOpen(true) : respondToMove(true))}
+              >
+                {offered
+                  ? `Read the brief & move to ${application.offeredDepartment}`
+                  : `Move to ${application.offeredDepartment}`}
+              </Button>
+              <Button
+                variant="outline"
+                loading={deciding === "decline"}
+                onClick={() => respondToMove(false)}
+              >
+                Stay with {application.departmentPreference}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <DepartmentAgreementModal
+        open={briefOpen}
+        department={offered}
+        preferenceLabel="Proposed department"
+        onAgree={() => {
+          setBriefOpen(false);
+          respondToMove(true);
+        }}
+        onCancel={() => setBriefOpen(false)}
+      />
 
       {application.status === "SECOND_PREFERENCE_OFFERED" && (
         <Card className="border-orange-300 bg-orange-50/60">

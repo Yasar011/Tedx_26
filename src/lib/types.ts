@@ -19,6 +19,9 @@ export type ApplicationStatus =
   /** Turned down by their first choice, offered their second. Waiting on
    *  the applicant to accept or decline. */
   | "SECOND_PREFERENCE_OFFERED"
+  /** An Admin has proposed moving them to a different department. Waiting
+   *  on the applicant to read that department's brief and agree. */
+  | "DEPARTMENT_CHANGE_OFFERED"
   /** The applicant declined the second-choice offer themselves. */
   | "WITHDRAWN";
 
@@ -94,6 +97,13 @@ export interface Application {
   movedToSecond?: boolean;
   /** The department that turned them down first, kept for context. */
   rejectedByDepartment?: string | null;
+  /** Department an Admin has proposed moving them to, pending the
+   *  applicant's agreement. Their current department is left untouched
+   *  until they accept, so declining costs them nothing. */
+  offeredDepartment?: string | null;
+  /** Where they were in the pipeline when the offer was made, so declining
+   *  puts them back rather than resetting their progress. */
+  statusBeforeOffer?: ApplicationStatus | null;
   createdAt: number;
   updatedAt: number;
   reviewedBy?: string | null;

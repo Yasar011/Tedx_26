@@ -148,6 +148,19 @@ export const applicantEmails = {
     };
   },
 
+  departmentChangeOffered(name: string, currentDepartment: string, newDepartment: string) {
+    return {
+      subject: `A different team for you? — ${EVENT}`,
+      heading: `A suggestion, ${name.split(" ")[0]}`,
+      message: `You applied to ${currentDepartment}. That team has had a lot of applications, and having read yours we think you'd be a strong fit for ${newDepartment} instead — so we'd like to move your application there, with your agreement.`,
+      detail:
+        `Nothing has changed yet. Sign in, read what the ${newDepartment} team does, and ` +
+        `accept if you're happy with it.\n\n` +
+        `If you'd rather stay with ${currentDepartment}, decline and your application carries ` +
+        `on there exactly as it was — declining does not count against you.`,
+    };
+  },
+
   waitlisted(name: string, department: string) {
     return {
       subject: `You're on the waitlist — ${EVENT}`,

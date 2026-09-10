@@ -29,6 +29,7 @@ export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
   REJECTED: "Rejected",
   WAITLISTED: "Waitlisted",
   SECOND_PREFERENCE_OFFERED: "Second Choice Offered",
+  DEPARTMENT_CHANGE_OFFERED: "Department Change Offered",
   WITHDRAWN: "Withdrawn",
 };
 
@@ -43,6 +44,7 @@ export const APPLICATION_STATUS_COLORS: Record<ApplicationStatus, string> = {
   REJECTED: "bg-red-100 text-red-700",
   WAITLISTED: "bg-yellow-100 text-yellow-700",
   SECOND_PREFERENCE_OFFERED: "bg-orange-100 text-orange-700",
+  DEPARTMENT_CHANGE_OFFERED: "bg-sky-100 text-sky-700",
   WITHDRAWN: "bg-neutral-200 text-neutral-600",
 };
 

@@ -24,6 +24,18 @@ import { BulkScheduleModal } from "@/components/apply/BulkScheduleModal";
 import { Slot } from "@/lib/slots";
 import { toast } from "sonner";
 
+/** Statuses where proposing a different department still makes sense — not
+ *  once they are approved, rejected, withdrawn, or already weighing an offer. */
+const MOVEABLE_STATUSES: Application["status"][] = [
+  "SUBMITTED",
+  "UNDER_REVIEW",
+  "SHORTLISTED",
+  "INTERVIEW_SCHEDULED",
+  "INTERVIEW_COMPLETED",
+  "CORE_REVIEW",
+  "WAITLISTED",
+];
+
 export default function DepartmentApplicantsPage() {
   const { profile } = useAuth();
   const [department, setDepartment] = useState<Department | null>(null);
@@ -43,6 +55,11 @@ export default function DepartmentApplicantsPage() {
   } | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  // Proposing a move to another department. Held here until confirmed,
+  // because it emails the applicant and asks them to agree.
+  const [movingApp, setMovingApp] = useState<Application | null>(null);
+  const [moveTarget, setMoveTarget] = useState("");
+  const [movingBusy, setMovingBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
@@ -51,13 +68,13 @@ export default function DepartmentApplicantsPage() {
   async function load() {
     if (!profile) return;
 
-    // Admin/Core can review any department's applicants; everyone else is
-    // scoped to their own.
-    if (canBrowseAll && allDepartments.length === 0) {
+    // Every reviewer needs the department list now — Admin/Core to switch
+    // between them, and anyone proposing a move to pick the destination.
+    if (allDepartments.length === 0) {
       const snap = await getDocs(collection(db, "departments"));
       const depts = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Department));
       setAllDepartments(depts);
-      if (!selectedId) {
+      if (canBrowseAll && !selectedId) {
         setSelectedId(profile.departmentId ?? depts[0]?.id ?? null);
         return; // re-runs with the selection applied
       }
@@ -133,6 +150,58 @@ export default function DepartmentApplicantsPage() {
       applicantEmails.shortlisted(app.name, app.departmentPreference)
     );
     load();
+  }
+
+  /**
+   * Proposes moving an applicant to a different department.
+   *
+   * Deliberately an offer rather than a move: one team getting most of the
+   * applications is a real problem, but silently reassigning someone to a
+   * team they never chose is not the fix. Their department is left exactly
+   * as it is and only the proposal is recorded, so the application carries
+   * on untouched unless they agree. Their current status is kept so
+   * declining costs them nothing.
+   */
+  async function offerMove() {
+    if (!movingApp || !moveTarget) return;
+    setMovingBusy(true);
+    try {
+      await updateDoc(doc(db, "applications", movingApp.id), {
+        status: "DEPARTMENT_CHANGE_OFFERED",
+        offeredDepartment: moveTarget,
+        statusBeforeOffer: movingApp.status,
+        updatedAt: Date.now(),
+      });
+
+      await logActivity({
+        actorId: profile!.uid,
+        actorName: profile!.name,
+        action: "DEPARTMENT_CHANGE_OFFERED",
+        targetType: "application",
+        targetId: movingApp.id,
+        message: `${profile!.name} asked ${movingApp.name} to move from ${movingApp.departmentPreference} to ${moveTarget}`,
+        departmentId: department?.id ?? null,
+      });
+
+      toast.success(`${movingApp.name} asked to move to ${moveTarget}`);
+
+      await notifyApplicant(
+        movingApp.email,
+        applicantEmails.departmentChangeOffered(
+          movingApp.name,
+          movingApp.departmentPreference,
+          moveTarget
+        )
+      );
+
+      setMovingApp(null);
+      setMoveTarget("");
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not propose the move");
+    } finally {
+      setMovingBusy(false);
+    }
   }
 
   /** Sends an applicant email and reports quota problems rather than hiding them. */
@@ -463,6 +532,19 @@ export default function DepartmentApplicantsPage() {
                     </Button>
                   )}
 
+                  {MOVEABLE_STATUSES.includes(app.status) && allDepartments.length > 1 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setMovingApp(app);
+                        setMoveTarget("");
+                      }}
+                    >
+                      Move dept
+                    </Button>
+                  )}
+
                   {/* Turning someone down sits apart from the forward-moving
                       actions, so it can't be hit by reflex. */}
                   {[
@@ -504,6 +586,52 @@ export default function DepartmentApplicantsPage() {
         progress={bulkProgress}
         running={bulkRunning}
       />
+
+      <Modal
+        open={!!movingApp}
+        onClose={() => {
+          setMovingApp(null);
+          setMoveTarget("");
+        }}
+        title={movingApp ? `Move ${movingApp.name} to another department?` : ""}
+      >
+        <p className="text-sm text-neutral-600">
+          They applied to <strong>{movingApp?.departmentPreference}</strong>. This emails them
+          asking whether they&apos;d like to move — it doesn&apos;t move them. Their application
+          stays exactly where it is unless they agree.
+        </p>
+
+        <div className="mt-4">
+          <FormField label="Move to" hint="They'll be shown this department's brief before deciding.">
+            <Select value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)}>
+              <option value="">Choose a department</option>
+              {allDepartments
+                .filter((d) => d.name !== movingApp?.departmentPreference)
+                .map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+            </Select>
+          </FormField>
+        </div>
+
+        <div className="mt-5 flex gap-2">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={() => {
+              setMovingApp(null);
+              setMoveTarget("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button className="flex-1" disabled={!moveTarget} loading={movingBusy} onClick={offerMove}>
+            Ask them to move
+          </Button>
+        </div>
+      </Modal>
 
       <Modal
         open={!!pendingDecision}
