@@ -2,8 +2,10 @@
 
 "use client";
 
+import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardContent } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { Clock } from "lucide-react";
 
 export default function PendingPage() {
@@ -21,6 +23,19 @@ export default function PendingPage() {
             role or department. An Admin needs to activate your access from the Team
             Management page.
           </p>
+
+          {/* Most people who land here are volunteers who signed up meaning to
+              apply, and were left waiting on an Admin for something they can
+              do themselves. */}
+          <div className="mt-6 w-full border-t border-neutral-100 pt-6">
+            <p className="text-sm text-neutral-600">
+              Meant to join as a volunteer? You don&apos;t need to wait — fill in the
+              application form and the team will pick it up from there.
+            </p>
+            <Link href="/apply">
+              <Button className="mt-4">Apply to join a team</Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
